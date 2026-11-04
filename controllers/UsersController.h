@@ -19,10 +19,10 @@ class UsersController : public drogon::HttpController<UsersController , false>
     // METHOD_ADD(UsersController::your_method_name, "/{1}/{2}/list", Get); // path is /UsersController/{arg1}/{arg2}/list
     // ADD_METHOD_TO(UsersController::your_method_name, "/absolute/path/{1}/{2}/list", Get); // path is /absolute/path/{arg1}/{arg2}/list
     ADD_METHOD_TO(UsersController::CreateUser, API_V1 + "/users", Post);
-    ADD_METHOD_TO(UsersController::GetAllUsers, API_V1 + "/users", Get);
-    ADD_METHOD_VIA_REGEX(UsersController::GetUserById, API_V1 + "/users/([0-9a-fA-F-]{36})", Get , "JwtMiddleWare");
-    ADD_METHOD_VIA_REGEX(UsersController::UpdateUser,  API_V1 + "/users/([0-9a-fA-F-]{36})", Put , "JwtMiddleWare");
-    ADD_METHOD_VIA_REGEX(UsersController::DeleteUser,  API_V1 + "/users/([0-9a-fA-F-]{36})", Delete , "JwtMiddleWare");
+    ADD_METHOD_TO(UsersController::GetAllUsers, API_V1 + "/users", Get, "JwtMiddleWare", "AdminMiddleware");
+    ADD_METHOD_VIA_REGEX(UsersController::GetUserById, API_V1 + "/users/([0-9a-fA-F-]{36})", Get , "JwtMiddleWare", "AccountOwnerMiddleware");
+    ADD_METHOD_VIA_REGEX(UsersController::UpdateUser,  API_V1 + "/users/([0-9a-fA-F-]{36})", Put , "JwtMiddleWare", "AccountOwnerMiddleware");
+    ADD_METHOD_VIA_REGEX(UsersController::DeleteUser,  API_V1 + "/users/([0-9a-fA-F-]{36})", Delete , "JwtMiddleWare", "AccountOwnerMiddleware");
 
     METHOD_LIST_END
     // your declaration of processing function maybe like this:

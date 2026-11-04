@@ -53,4 +53,11 @@ inline drogon::HttpResponsePtr notFound(const std::string& message = "Not found"
     return error(drogon::k404NotFound, message);
 }
 
+template <typename Model>
+Json::Value toJsonArray(const std::vector<Model>& rows) {
+    Json::Value list(Json::arrayValue);
+    for (const auto& row : rows) list.append(row.toJson());
+    return list;
+}
+
 }

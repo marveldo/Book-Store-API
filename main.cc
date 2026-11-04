@@ -1,11 +1,16 @@
 #include <drogon/drogon.h>
 #include "settings/Settings.h"
 #include "controllers/UsersController.h"
+#include "controllers/BooksController.h"
+#include "controllers/OrdersController.h"
+#include "controllers/PaymentsController.h"
+#include "controllers/SettingsController.h"
 #include "controllers/AuthController.h"
 #include "services/Services.hpp"
 #include "bootstrap/Bootstrap.hpp"
 #include "utils/Errors.hpp"
 #include "middleware/JwtMiddleware.hpp"
+#include "middleware/AdminMiddleware.hpp"
 
 
 using namespace drogon;
@@ -45,8 +50,13 @@ int main() {
 
     Services* service = getServices(ctx->db, *ctx->settings);
     drogon::app().registerMiddleware(std::make_shared<JwtMiddleWare>(service));
+    drogon::app().registerMiddleware(std::make_shared<AdminMiddleware>(service));
     drogon::app().registerController(std::make_shared<UsersController>(service));
     drogon::app().registerController(std::make_shared<AuthController>(service));
+    drogon::app().registerController(std::make_shared<BooksController>(service));
+    drogon::app().registerController(std::make_shared<OrdersController>(service));
+    drogon::app().registerController(std::make_shared<PaymentsController>(service));
+    drogon::app().registerController(std::make_shared<SettingsController>(service));
     drogon::app().setExceptionHandler(handleException);
     drogon::app().setCustom404Page(res::notFound("Route not found"));
     drogon::app().run();
