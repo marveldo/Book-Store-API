@@ -1,0 +1,58 @@
+#include "JwtService.hpp"
+#include <jwt-cpp/traits/nlohmann-json/defaults.h>
+
+
+
+namespace {
+     auto conversion = [](const std::string& str) -> std::chrono::seconds {
+        if (str.empty()) return std::chrono::seconds(0);
+        char unit = str.back();
+        int value = std::stoi(str.substr(0, str.size() - 1));
+        switch (unit) {
+            case 's': return std::chrono::seconds(value);
+            case 'm': return std::chrono::minutes(value);
+            case 'h': return std::chrono::hours(value);
+            case 'd': return std::chrono::hours(value * 24);
+            default: throw std::invalid_argument("Invalid time unit in expiration string");
+      }};
+}
+
+std::string JwtService::generateAccessToken(Claims& claims) {
+     std::string token =jwt::create()
+            .set_type("JWS")
+            .set_subject(claims.userId)
+            .set_payload_claim("email", jwt::claim(claims.email))
+            .set_payload_claim("tokenType", jwt::claim(claims.tokenType))
+            .set_payload_claim("email", jwt::claim(claims.email))
+            .set_expires_at(std::chrono::system_clock::now() + conversion(accessExpiration_))
+            .sign(jwt::algorithm::hs256{accessSecret_});
+
+    return token;
+
+}
+
+std::string JwtService::generateRefreshToken(Claims& claims) {
+    std::string token = jwt::create()
+            .set_type("JWS")
+            .set_subject(claims.userId)
+            .set_payload_claim("email", jwt::claim(claims.email))
+            .set_payload_claim("tokenType", jwt::claim(claims.tokenType))
+            .set_payload_claim("email", jwt::claim(claims.email))
+            .set_expires_at(std::chrono::system_clock::now() + conversion(refreshExpiration_))
+            .sign(jwt::algorithm::hs256{refreshSecret_});
+
+    return token;
+}
+
+std::shared_ptr<Claims> JwtService::verifyToken(const std::string& token) {
+    try {
+        auto decoded = jwt::decode(token);
+        std::shared_ptr<Claims> claims = std::make_shared<Claims>();
+        claims->userId = decoded.get_subject();
+        claims->tokenType = decoded.get_payload_claim("tokenType").as_string();
+        claims->email = decoded.get_payload_claim("email").as_string();
+        return claims;
+    } catch (const std::exception& e) {
+        return nullptr;
+    }
+}
