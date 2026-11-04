@@ -5,6 +5,7 @@
 #include "services/Services.hpp"
 #include "bootstrap/Bootstrap.hpp"
 #include "utils/Errors.hpp"
+#include "middleware/JwtMiddleware.hpp"
 
 
 using namespace drogon;
@@ -43,6 +44,7 @@ int main() {
     },{Get});
 
     Services* service = getServices(ctx->db, *ctx->settings);
+    drogon::app().registerMiddleware(std::make_shared<JwtMiddleWare>(service));
     drogon::app().registerController(std::make_shared<UsersController>(service));
     drogon::app().registerController(std::make_shared<AuthController>(service));
     drogon::app().setExceptionHandler(handleException);

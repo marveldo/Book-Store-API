@@ -2,11 +2,13 @@
 #include <string>
 #include <optional>
 #include <memory> 
+#include "utils/Role.hpp"
 
 struct Claims {
     std::string userId;
     std::string tokenType;
     std::string email;      
+    Role role = Role::User;
 };
 
 class JwtService {
@@ -17,10 +19,8 @@ class JwtService {
         std::string generateAccessToken(Claims& claims);
         std::string generateRefreshToken(Claims& claims);
 
-        std::optional<std::string> verifyAccessToken(const std::string& token);
-        std::optional<std::string> verifyRefreshToken(const std::string& token);
-
-        std::shared_ptr<Claims> verifyToken(const std::string& token);
+        std::shared_ptr<Claims> verifyAccessToken(const std::string& token);
+        std::shared_ptr<Claims> verifyRefreshToken(const std::string& token);
 
     private:
         std::string accessSecret_;

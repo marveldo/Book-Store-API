@@ -16,19 +16,20 @@ struct AppError : std::runtime_error {
 
 struct NotFound : AppError { explicit NotFound(const std::string& m) : AppError(drogon::k404NotFound, m) {} };
 struct Conflict : AppError { explicit Conflict(const std::string& m) : AppError(drogon::k409Conflict, m) {} };
+struct Forbidden : AppError { explicit Forbidden(const std::string& m) : AppError(drogon::k403Forbidden , m) {}};
 
 inline void handleException(const std::exception&,
                             const drogon::HttpRequestPtr& req,
                             std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
     try {
         throw;
-    } catch (const AppError& e) {
+    }catch (const AppError& e) {
         callback(res::error(e.status, e.what()));
-    } catch (const drogon::orm::UnexpectedRows&) {
+    }catch (const drogon::orm::UnexpectedRows&) {
         callback(res::notFound());
-    } catch (const drogon::orm::UniqueViolation&) {
+    }catch (const drogon::orm::UniqueViolation&) {
         callback(res::error(drogon::k409Conflict, "Already exists"));
-    } catch (const std::exception& e) {
+    }catch (const std::exception& e) {
         LOG_ERROR << req->path() << ": " << e.what();
         callback(res::error(drogon::k500InternalServerError, "Internal server error"));
     }

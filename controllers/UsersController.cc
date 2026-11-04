@@ -1,5 +1,6 @@
 #include "UsersController.h"
 #include "input/UserInputs.hpp"
+#include "utils/Errors.hpp"
 
 // Add definition of your processing function here
 
@@ -37,6 +38,7 @@ Task<HttpResponsePtr> UsersController::GetAllUsers(HttpRequestPtr req) {
 
 Task<HttpResponsePtr> UsersController::GetUserById(HttpRequestPtr req, std::string id) {
     Json::Value user;
+    if ((req -> attributes() ->get<std::string>("id")) != id  ) throw Forbidden("User can only view his Account");
     auto foundUser = co_await services_->userService->getUserById(id);
     user = foundUser.toJson();
     user.removeMember("password_hash");
@@ -45,6 +47,7 @@ Task<HttpResponsePtr> UsersController::GetUserById(HttpRequestPtr req, std::stri
 
 Task<HttpResponsePtr> UsersController::UpdateUser(HttpRequestPtr req, std::string id) {
     Json::Value user;
+    if ((req -> attributes() ->get<std::string>("id")) != id  ) throw Forbidden("User can only Update his Account");
     auto parseResult = parseUpdateUser(req->body());
     if (std::holds_alternative<std::vector<FieldError>>(parseResult)) {
         auto errors = std::get<std::vector<FieldError>>(parseResult);
@@ -63,6 +66,7 @@ Task<HttpResponsePtr> UsersController::UpdateUser(HttpRequestPtr req, std::strin
 }
 
 Task<HttpResponsePtr> UsersController::DeleteUser(HttpRequestPtr req, std::string id) {
+    if ((req -> attributes() ->get<std::string>("id")) != id  ) throw Forbidden("User can only delete his Account");
     bool deleted = co_await services_->userService->deleteUser(id);
     if (deleted) {
         co_return res::success(Json::Value(), drogon::k200OK);

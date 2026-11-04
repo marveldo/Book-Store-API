@@ -72,6 +72,7 @@ aux_source_directory(models MODEL_SRC)
 aux_source_directory(settings SETTINGS_SRC)
 aux_source_directory(utils UTILS_SRC)
 aux_source_directory(bootstrap BOOTSTRAP_SRC)
+aux_source_directory(middleware MIDDLEWARE_SRC)
 # To read every file in every folders of services 
 file(GLOB_RECURSE SERVICES_SRC CONFIGURE_DEPENDS services/*.cpp services/*.cc)
 
@@ -124,6 +125,7 @@ target_sources(${PROJECT_NAME}
                ${UTILS_SRC}
                ${SERVICES_SRC}
                ${BOOTSTRAP_SRC}
+               ${MIDDLEWARE_SRC}
                )
 # ##############################################################################
 # uncomment the following line for dynamically loading views

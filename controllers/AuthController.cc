@@ -20,8 +20,9 @@ Task<HttpResponsePtr> AuthController::Login(HttpRequestPtr req) {
         co_return res::error(drogon::k401Unauthorized, "Invalid email or password");
     }
 
-    Claims accessClaims{user->getValueOfId(), "access", user->getValueOfEmail()};
-    Claims refreshClaims{user->getValueOfId(), "refresh", user->getValueOfEmail()};
+    Role role = roleFromString(user->getValueOfRole()).value_or(Role::User);
+    Claims accessClaims{user->getValueOfId(), "access", user->getValueOfEmail(), role};
+    Claims refreshClaims{user->getValueOfId(), "refresh", user->getValueOfEmail(), role};
 
     Json::Value userJson = user->toJson();
     userJson.removeMember("password_hash");
