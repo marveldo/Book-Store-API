@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(cpp_server_test CXX)
 
 add_executable(${PROJECT_NAME} test_main.cc)

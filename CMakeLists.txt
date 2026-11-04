@@ -1,5 +1,5 @@
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(cpp_server CXX)
 
 # Custom file extension configuration
