@@ -1,22 +1,24 @@
 #pragma once
 #include <string>
 #include <functional>
-#include <unordered_map>>
+#include <unordered_map>
+#include <vector>
+#include <any>
 
-template<typename T>
 
 class EventBus {
     public :
 
       EventBus() : events_({}) {};
-
+      template<typename T>
       void Publish(std::string eventName, T payload);
-
+      template<typename T>
       void Subscribe(std::string eventName , std::function<void(T)> handler);
 
     private :
-      std::unordered_map<string,std::function<void(T)>> events_;
+      std::unordered_map<std::string,std::vector<std::function<void(std::any)>>> events_;
 
 };
 
-void RegisterEvents();
+void RegisterEvents(EventBus* eventOBj);
+
