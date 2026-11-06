@@ -31,6 +31,7 @@ int main() {
     //Run HTTP framework,the method will block in the internal event loop
     LOG_INFO << "Starting server on port " << ctx->settings->port << " with " << ctx->settings->threads << " threads in " << ctx->settings->environment << " mode.";
     drogon::app().setThreadNum(ctx->settings->threads);
+    drogon::app().setFloatPrecisionInJson(2, "decimal");
     drogon::app().registerPreSendingAdvice([](const HttpRequestPtr &req, const HttpResponsePtr &resp) {
         resp->addHeader("Access-Control-Allow-Origin", "*");
         resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");

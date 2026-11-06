@@ -1,4 +1,5 @@
 #include "BooksController.h"
+#include "utils/MoneyJson.hpp"
 #include "input/BookInputs.hpp"
 #include "input/QueryInputs.hpp"
 
@@ -10,12 +11,12 @@ Task<HttpResponsePtr> BooksController::ListBooks(HttpRequestPtr req) {
     const auto& page = std::get<PageInput>(query);
 
     auto books = co_await services_->bookService->getAllBooks(page.page, page.perPage);
-    co_return res::success(res::toJsonArray(books));
+    co_return res::success(res::toJsonArray(books, bookJson));
 }
 
 Task<HttpResponsePtr> BooksController::GetBook(HttpRequestPtr, std::string id) {
     auto book = co_await services_->bookService->getBookById(id);
-    co_return res::success(book.toJson());
+    co_return res::success(bookJson(book));
 }
 
 Task<HttpResponsePtr> BooksController::CreateBook(HttpRequestPtr req) {
@@ -25,7 +26,7 @@ Task<HttpResponsePtr> BooksController::CreateBook(HttpRequestPtr req) {
     }
 
     auto book = co_await services_->bookService->createBook(std::get<CreateBookInput>(parsed));
-    co_return res::success(book.toJson(), k201Created);
+    co_return res::success(bookJson(book), k201Created);
 }
 
 Task<HttpResponsePtr> BooksController::UpdateBook(HttpRequestPtr req, std::string id) {
@@ -35,7 +36,7 @@ Task<HttpResponsePtr> BooksController::UpdateBook(HttpRequestPtr req, std::strin
     }
 
     auto book = co_await services_->bookService->updateBook(id, std::get<UpdateBookInput>(parsed));
-    co_return res::success(book.toJson());
+    co_return res::success(bookJson(book));
 }
 
 Task<HttpResponsePtr> BooksController::DeleteBook(HttpRequestPtr, std::string id) {
@@ -48,5 +49,5 @@ Task<HttpResponsePtr> BooksController::DeleteBook(HttpRequestPtr, std::string id
 Task<HttpResponsePtr> BooksController::MyBooks(HttpRequestPtr req) {
     const auto userId = req->attributes()->get<std::string>("id");
     auto books = co_await services_->bookService->getBooksByUser(userId);
-    co_return res::success(res::toJsonArray(books));
+    co_return res::success(res::toJsonArray(books, bookJson));
 }

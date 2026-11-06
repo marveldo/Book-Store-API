@@ -46,7 +46,7 @@ const std::vector<typename Orders::MetaData> Orders::metaData_={
 {"user_id","std::string","uuid",0,0,0,1},
 {"book_id","std::string","uuid",0,0,0,1},
 {"quantity","int32_t","integer",4,0,0,1},
-{"total_price","std::string","numeric",0,0,0,1}
+{"total_price","int64_t","bigint",8,0,0,1}
 
 };
 const std::string &Orders::getColumnName(size_t index) noexcept(false)
@@ -90,7 +90,7 @@ Orders::Orders(const Row &r, const ssize_t indexOffset) noexcept
         if(!r["total_price"].isNull())
         {
 
-            totalPrice_=std::make_shared<std::string>(r["total_price"].as<std::string>());
+            totalPrice_=std::make_shared<int64_t>(r["total_price"].as<int64_t>());
 
         }
 
@@ -141,7 +141,7 @@ Orders::Orders(const Row &r, const ssize_t indexOffset) noexcept
         if(!r[index].isNull())
         {
 
-            totalPrice_=std::make_shared<std::string>(r[index].as<std::string>());
+            totalPrice_=std::make_shared<int64_t>(r[index].as<int64_t>());
 
         }
 
@@ -198,7 +198,7 @@ Orders::Orders(const Json::Value &pJson, const std::vector<std::string> &pMasque
         dirtyFlag_[4] = true;
         if(!pJson[pMasqueradingVector[4]].isNull())
         {
-            totalPrice_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+            totalPrice_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[4]].asInt64());
         }
     }
 
@@ -248,7 +248,7 @@ Orders::Orders(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[4]=true;
         if(!pJson["total_price"].isNull())
         {
-            totalPrice_=std::make_shared<std::string>(pJson["total_price"].asString());
+            totalPrice_=std::make_shared<int64_t>((int64_t)pJson["total_price"].asInt64());
         }
     }
 
@@ -303,7 +303,7 @@ void Orders::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[4] = true;
         if(!pJson[pMasqueradingVector[4]].isNull())
         {
-            totalPrice_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+            totalPrice_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[4]].asInt64());
         }
     }
 
@@ -352,7 +352,7 @@ void Orders::updateByJson(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[4] = true;
         if(!pJson["total_price"].isNull())
         {
-            totalPrice_=std::make_shared<std::string>(pJson["total_price"].asString());
+            totalPrice_=std::make_shared<int64_t>((int64_t)pJson["total_price"].asInt64());
         }
     }
 
@@ -446,25 +446,20 @@ void Orders::setQuantity(const int32_t &pQuantity) noexcept
     dirtyFlag_[3] = true;
 }
 
-const std::string &Orders::getValueOfTotalPrice() const noexcept
+const int64_t &Orders::getValueOfTotalPrice() const noexcept
 {
-    static const std::string defaultValue = std::string();
+    static const int64_t defaultValue = int64_t();
     if(totalPrice_)
         return *totalPrice_;
     return defaultValue;
 }
-const std::shared_ptr<std::string> &Orders::getTotalPrice() const noexcept
+const std::shared_ptr<int64_t> &Orders::getTotalPrice() const noexcept
 {
     return totalPrice_;
 }
-void Orders::setTotalPrice(const std::string &pTotalPrice) noexcept
+void Orders::setTotalPrice(const int64_t &pTotalPrice) noexcept
 {
-    totalPrice_ = std::make_shared<std::string>(pTotalPrice);
-    dirtyFlag_[4] = true;
-}
-void Orders::setTotalPrice(std::string &&pTotalPrice) noexcept
-{
-    totalPrice_ = std::make_shared<std::string>(std::move(pTotalPrice));
+    totalPrice_ = std::make_shared<int64_t>(pTotalPrice);
     dirtyFlag_[4] = true;
 }
 
@@ -698,7 +693,7 @@ Json::Value Orders::toJson() const
     if(getTotalPrice())
     {
 
-        ret["total_price"]=getValueOfTotalPrice();
+        ret["total_price"]=(Json::Int64)getValueOfTotalPrice();
 
     }
     else
@@ -782,7 +777,7 @@ Json::Value Orders::toMasqueradedJson(
             if(getTotalPrice())
             {
 
-                ret[pMasqueradingVector[4]]=getValueOfTotalPrice();
+                ret[pMasqueradingVector[4]]=(Json::Int64)getValueOfTotalPrice();
 
             }
             else
@@ -842,7 +837,7 @@ Json::Value Orders::toMasqueradedJson(
     if(getTotalPrice())
     {
 
-        ret["total_price"]=getValueOfTotalPrice();
+        ret["total_price"]=(Json::Int64)getValueOfTotalPrice();
 
     }
     else
@@ -1182,7 +1177,7 @@ bool Orders::validJsonOfField(size_t index,
                 return false;
             }
 
-            if(!pJson.isString())
+            if(!pJson.isInt64())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

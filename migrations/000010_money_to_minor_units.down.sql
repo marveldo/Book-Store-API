@@ -1,0 +1,5 @@
+ALTER TABLE books    ALTER COLUMN price       DROP DEFAULT;
+ALTER TABLE books    ALTER COLUMN price       TYPE NUMERIC(10,2) USING price / 100.0;
+ALTER TABLE books    ALTER COLUMN price       SET DEFAULT 0;
+ALTER TABLE orders   ALTER COLUMN total_price TYPE NUMERIC(10,2) USING total_price / 100.0;
+ALTER TABLE payments ALTER COLUMN amount      TYPE NUMERIC(10,2) USING amount / 100.0;

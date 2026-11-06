@@ -1,5 +1,6 @@
 #pragma once
 #include "utils/Validation.hpp"
+#include "utils/Money.hpp"
 #include <cstdint>
 #include <optional>
 #include <regex>
@@ -9,7 +10,7 @@
 struct CreateBookInput {
     std::string                title;
     std::string                author;
-    std::string                price;            // "12.99": a string, because NUMERIC must not go through a float
+    int64_t                    price;
     std::optional<std::string> isbn;
     std::optional<std::string> description;
     std::optional<int64_t>     publishedYear;
@@ -18,14 +19,13 @@ struct CreateBookInput {
 struct UpdateBookInput {                         // every field optional: nullopt = leave unchanged
     std::optional<std::string> title;
     std::optional<std::string> author;
-    std::optional<std::string> price;
+    std::optional<int64_t>     price;
     std::optional<std::string> isbn;
     std::optional<std::string> description;
     std::optional<int64_t>     publishedYear;
 };
 
 namespace book_rules {
-    inline const std::regex price(R"(\d{1,8}(\.\d{1,2})?)");    
     inline const std::regex isbn(R"(\d{9}[\dX]|\d{13})");      
 }
 
@@ -34,13 +34,12 @@ inline ParseResult<CreateBookInput> parseCreateBook(std::string_view raw) {
         v.onlyAllow({"title", "author", "price", "isbn", "description", "published_year"});
         auto title       = v.requiredString("title", 1, 255);
         auto author      = v.requiredString("author", 1, 255);
-        auto price       = v.requiredString("price", 1, 11);
+        auto price       = v.requiredNumber("price", 0, 10000000);
         auto isbn        = v.optionalString("isbn", 10, 13);
         auto description = v.optionalString("description", 1, 5000);
         auto year        = v.optionalInt("published_year", 1, 9999);
-        v.matches(price, "price", book_rules::price, "must look like 12.99 (max 2 decimal places)");
         v.matches(isbn,  "isbn",  book_rules::isbn,  "must be 10 or 13 digits, no dashes");
-        return CreateBookInput{title.value_or(""), author.value_or(""), price.value_or(""),
+        return CreateBookInput{title.value_or(""), author.value_or(""), money::toMinor(price.value_or(0)),
                                isbn, description, year};
     });
 }
@@ -51,12 +50,12 @@ inline ParseResult<UpdateBookInput> parseUpdateBook(std::string_view raw) {
         UpdateBookInput in{
             v.optionalString("title", 1, 255),
             v.optionalString("author", 1, 255),
-            v.optionalString("price", 1, 11),
+            std::nullopt,
             v.optionalString("isbn", 10, 13),
             v.optionalString("description", 1, 5000),
             v.optionalInt("published_year", 1, 9999),
         };
-        v.matches(in.price, "price", book_rules::price, "must look like 12.99 (max 2 decimal places)");
+        if (auto price = v.optionalNumber("price", 0, 10000000)) in.price = money::toMinor(*price);
         v.matches(in.isbn,  "isbn",  book_rules::isbn,  "must be 10 or 13 digits, no dashes");
         if (v.ok() && !in.title && !in.author && !in.price && !in.isbn && !in.description && !in.publishedYear)
             v.addError("body", "must contain at least one field to update");

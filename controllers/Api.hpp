@@ -10,6 +10,7 @@ inline const std::string API_V1 = "/api/v1";
 #include <vector>
 #include "utils/Validation.hpp"
 
+
 namespace res {
 
 inline drogon::HttpResponsePtr json(drogon::HttpStatusCode status, const Json::Value& body) {
@@ -57,6 +58,13 @@ template <typename Model>
 Json::Value toJsonArray(const std::vector<Model>& rows) {
     Json::Value list(Json::arrayValue);
     for (const auto& row : rows) list.append(row.toJson());
+    return list;
+}
+
+template <typename Model, typename ToJson>
+Json::Value toJsonArray(const std::vector<Model>& rows, ToJson toJson) {
+    Json::Value list(Json::arrayValue);
+    for (const auto& row : rows) list.append(toJson(row));
     return list;
 }
 

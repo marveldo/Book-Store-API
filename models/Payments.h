@@ -140,12 +140,11 @@ class Payments
 
     /**  For column amount  */
     ///Get the value of the column amount, returns the default value if the column is null
-    const std::string &getValueOfAmount() const noexcept;
+    const int64_t &getValueOfAmount() const noexcept;
     ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<std::string> &getAmount() const noexcept;
+    const std::shared_ptr<int64_t> &getAmount() const noexcept;
     ///Set the value of the column amount
-    void setAmount(const std::string &pAmount) noexcept;
-    void setAmount(std::string &&pAmount) noexcept;
+    void setAmount(const int64_t &pAmount) noexcept;
 
 
 
@@ -185,7 +184,7 @@ class Payments
     std::shared_ptr<std::string> id_;
     std::shared_ptr<std::string> userId_;
     std::shared_ptr<std::string> orderId_;
-    std::shared_ptr<std::string> amount_;
+    std::shared_ptr<int64_t> amount_;
 
     struct MetaData
     {

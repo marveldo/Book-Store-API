@@ -149,12 +149,11 @@ class Orders
 
     /**  For column total_price  */
     ///Get the value of the column total_price, returns the default value if the column is null
-    const std::string &getValueOfTotalPrice() const noexcept;
+    const int64_t &getValueOfTotalPrice() const noexcept;
     ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<std::string> &getTotalPrice() const noexcept;
+    const std::shared_ptr<int64_t> &getTotalPrice() const noexcept;
     ///Set the value of the column total_price
-    void setTotalPrice(const std::string &pTotalPrice) noexcept;
-    void setTotalPrice(std::string &&pTotalPrice) noexcept;
+    void setTotalPrice(const int64_t &pTotalPrice) noexcept;
 
 
 
@@ -195,7 +194,7 @@ class Orders
     std::shared_ptr<std::string> userId_;
     std::shared_ptr<std::string> bookId_;
     std::shared_ptr<int32_t> quantity_;
-    std::shared_ptr<std::string> totalPrice_;
+    std::shared_ptr<int64_t> totalPrice_;
 
     struct MetaData
     {

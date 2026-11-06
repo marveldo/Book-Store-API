@@ -170,12 +170,11 @@ class Books
 
     /**  For column price  */
     ///Get the value of the column price, returns the default value if the column is null
-    const std::string &getValueOfPrice() const noexcept;
+    const int64_t &getValueOfPrice() const noexcept;
     ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<std::string> &getPrice() const noexcept;
+    const std::shared_ptr<int64_t> &getPrice() const noexcept;
     ///Set the value of the column price
-    void setPrice(const std::string &pPrice) noexcept;
-    void setPrice(std::string &&pPrice) noexcept;
+    void setPrice(const int64_t &pPrice) noexcept;
 
     /**  For column created_at  */
     ///Get the value of the column created_at, returns the default value if the column is null
@@ -224,7 +223,7 @@ class Books
     std::shared_ptr<std::string> isbn_;
     std::shared_ptr<std::string> description_;
     std::shared_ptr<short> publishedYear_;
-    std::shared_ptr<std::string> price_;
+    std::shared_ptr<int64_t> price_;
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
 

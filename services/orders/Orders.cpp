@@ -3,7 +3,6 @@
 #include "models/Books.h"
 #include "models/Payments.h"
 #include "utils/Errors.hpp"
-#include "utils/Money.hpp"
 
 using namespace drogon::orm;
 using namespace drogon_model::bookstore;
@@ -26,7 +25,7 @@ Task<Orders> OrderService::getOrderById(const std::string& id) {
 
 Task<Orders> OrderService::createOrder(const std::string& userId, const CreateOrderInput& input) {
     CoroMapper<Books> books(dbClient_);
-    std::string price;
+    int64_t price = 0;
     try {
         price = (co_await books.findByPrimaryKey(input.bookId)).getValueOfPrice();
     } catch (const UnexpectedRows&) {
@@ -37,7 +36,7 @@ Task<Orders> OrderService::createOrder(const std::string& userId, const CreateOr
     order.setUserId(userId);
     order.setBookId(input.bookId);
     order.setQuantity(static_cast<int32_t>(input.quantity));
-    order.setTotalPrice(money::fromCents(money::toCents(price) * input.quantity));
+    order.setTotalPrice(price * input.quantity);
 
     CoroMapper<Orders> orders(dbClient_);
     co_return co_await orders.insert(order);

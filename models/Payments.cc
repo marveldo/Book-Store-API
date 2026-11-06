@@ -43,7 +43,7 @@ const std::vector<typename Payments::MetaData> Payments::metaData_={
 {"id","std::string","uuid",0,0,1,1},
 {"user_id","std::string","uuid",0,0,0,1},
 {"order_id","std::string","uuid",0,0,0,1},
-{"amount","std::string","numeric",0,0,0,1}
+{"amount","int64_t","bigint",8,0,0,1}
 
 };
 const std::string &Payments::getColumnName(size_t index) noexcept(false)
@@ -80,7 +80,7 @@ Payments::Payments(const Row &r, const ssize_t indexOffset) noexcept
         if(!r["amount"].isNull())
         {
 
-            amount_=std::make_shared<std::string>(r["amount"].as<std::string>());
+            amount_=std::make_shared<int64_t>(r["amount"].as<int64_t>());
 
         }
 
@@ -123,7 +123,7 @@ Payments::Payments(const Row &r, const ssize_t indexOffset) noexcept
         if(!r[index].isNull())
         {
 
-            amount_=std::make_shared<std::string>(r[index].as<std::string>());
+            amount_=std::make_shared<int64_t>(r[index].as<int64_t>());
 
         }
 
@@ -171,7 +171,7 @@ Payments::Payments(const Json::Value &pJson, const std::vector<std::string> &pMa
         dirtyFlag_[3] = true;
         if(!pJson[pMasqueradingVector[3]].isNull())
         {
-            amount_=std::make_shared<std::string>(pJson[pMasqueradingVector[3]].asString());
+            amount_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[3]].asInt64());
         }
     }
 
@@ -212,7 +212,7 @@ Payments::Payments(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[3]=true;
         if(!pJson["amount"].isNull())
         {
-            amount_=std::make_shared<std::string>(pJson["amount"].asString());
+            amount_=std::make_shared<int64_t>((int64_t)pJson["amount"].asInt64());
         }
     }
 
@@ -258,7 +258,7 @@ void Payments::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[3] = true;
         if(!pJson[pMasqueradingVector[3]].isNull())
         {
-            amount_=std::make_shared<std::string>(pJson[pMasqueradingVector[3]].asString());
+            amount_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[3]].asInt64());
         }
     }
 
@@ -298,7 +298,7 @@ void Payments::updateByJson(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[3] = true;
         if(!pJson["amount"].isNull())
         {
-            amount_=std::make_shared<std::string>(pJson["amount"].asString());
+            amount_=std::make_shared<int64_t>((int64_t)pJson["amount"].asInt64());
         }
     }
 
@@ -375,25 +375,20 @@ void Payments::setOrderId(std::string &&pOrderId) noexcept
     dirtyFlag_[2] = true;
 }
 
-const std::string &Payments::getValueOfAmount() const noexcept
+const int64_t &Payments::getValueOfAmount() const noexcept
 {
-    static const std::string defaultValue = std::string();
+    static const int64_t defaultValue = int64_t();
     if(amount_)
         return *amount_;
     return defaultValue;
 }
-const std::shared_ptr<std::string> &Payments::getAmount() const noexcept
+const std::shared_ptr<int64_t> &Payments::getAmount() const noexcept
 {
     return amount_;
 }
-void Payments::setAmount(const std::string &pAmount) noexcept
+void Payments::setAmount(const int64_t &pAmount) noexcept
 {
-    amount_ = std::make_shared<std::string>(pAmount);
-    dirtyFlag_[3] = true;
-}
-void Payments::setAmount(std::string &&pAmount) noexcept
-{
-    amount_ = std::make_shared<std::string>(std::move(pAmount));
+    amount_ = std::make_shared<int64_t>(pAmount);
     dirtyFlag_[3] = true;
 }
 
@@ -586,7 +581,7 @@ Json::Value Payments::toJson() const
     if(getAmount())
     {
 
-        ret["amount"]=getValueOfAmount();
+        ret["amount"]=(Json::Int64)getValueOfAmount();
 
     }
     else
@@ -656,7 +651,7 @@ Json::Value Payments::toMasqueradedJson(
             if(getAmount())
             {
 
-                ret[pMasqueradingVector[3]]=getValueOfAmount();
+                ret[pMasqueradingVector[3]]=(Json::Int64)getValueOfAmount();
 
             }
             else
@@ -705,7 +700,7 @@ Json::Value Payments::toMasqueradedJson(
     if(getAmount())
     {
 
-        ret["amount"]=getValueOfAmount();
+        ret["amount"]=(Json::Int64)getValueOfAmount();
 
     }
     else
@@ -989,7 +984,7 @@ bool Payments::validJsonOfField(size_t index,
                 return false;
             }
 
-            if(!pJson.isString())
+            if(!pJson.isInt64())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

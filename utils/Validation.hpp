@@ -5,6 +5,7 @@
 #include <optional>
 #include <regex>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -77,6 +78,21 @@ public:
                                        int64_t max = std::numeric_limits<int64_t>::max()) {
         if (!given(field)) return std::nullopt;
         return requiredInt(field, min, max);
+    }
+
+    std::optional<double> requiredNumber(const std::string& field, double min, double max) {
+        if (!present(field))           return std::nullopt;
+        if (!body_[field].is_number()) return fail(field, "must be a number");
+        auto value = body_[field].get<double>();
+        auto text = [](double d) { std::ostringstream out; out << d; return out.str(); };
+        if (value < min)               return fail(field, "must be at least " + text(min));
+        if (value > max)               return fail(field, "must be at most "  + text(max));
+        return value;
+    }
+
+    std::optional<double> optionalNumber(const std::string& field, double min, double max) {
+        if (!given(field)) return std::nullopt;
+        return requiredNumber(field, min, max);
     }
 
     template <typename E>

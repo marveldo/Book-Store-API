@@ -52,7 +52,7 @@ const std::vector<typename Books::MetaData> Books::metaData_={
 {"isbn","std::string","character varying",13,0,0,0},
 {"description","std::string","text",0,0,0,0},
 {"published_year","short","smallint",2,0,0,0},
-{"price","std::string","numeric",0,0,0,1},
+{"price","int64_t","bigint",8,0,0,1},
 {"created_at","::trantor::Date","timestamp with time zone",0,0,0,1},
 {"updated_at","::trantor::Date","timestamp with time zone",0,0,0,1}
 
@@ -112,7 +112,7 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
         if(!r["price"].isNull())
         {
 
-            price_=std::make_shared<std::string>(r["price"].as<std::string>());
+            price_=std::make_shared<int64_t>(r["price"].as<int64_t>());
 
         }
 
@@ -227,7 +227,7 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
         if(!r[index].isNull())
         {
 
-            price_=std::make_shared<std::string>(r[index].as<std::string>());
+            price_=std::make_shared<int64_t>(r[index].as<int64_t>());
 
         }
 
@@ -352,7 +352,7 @@ Books::Books(const Json::Value &pJson, const std::vector<std::string> &pMasquera
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            price_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+            price_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[6]].asInt64());
         }
     }
 
@@ -476,7 +476,7 @@ Books::Books(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[6]=true;
         if(!pJson["price"].isNull())
         {
-            price_=std::make_shared<std::string>(pJson["price"].asString());
+            price_=std::make_shared<int64_t>((int64_t)pJson["price"].asInt64());
         }
     }
 
@@ -605,7 +605,7 @@ void Books::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            price_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+            price_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[6]].asInt64());
         }
     }
 
@@ -728,7 +728,7 @@ void Books::updateByJson(const Json::Value &pJson) noexcept(false)
         dirtyFlag_[6] = true;
         if(!pJson["price"].isNull())
         {
-            price_=std::make_shared<std::string>(pJson["price"].asString());
+            price_=std::make_shared<int64_t>((int64_t)pJson["price"].asInt64());
         }
     }
 
@@ -937,25 +937,20 @@ void Books::setPublishedYearToNull() noexcept
     dirtyFlag_[5] = true;
 }
 
-const std::string &Books::getValueOfPrice() const noexcept
+const int64_t &Books::getValueOfPrice() const noexcept
 {
-    static const std::string defaultValue = std::string();
+    static const int64_t defaultValue = int64_t();
     if(price_)
         return *price_;
     return defaultValue;
 }
-const std::shared_ptr<std::string> &Books::getPrice() const noexcept
+const std::shared_ptr<int64_t> &Books::getPrice() const noexcept
 {
     return price_;
 }
-void Books::setPrice(const std::string &pPrice) noexcept
+void Books::setPrice(const int64_t &pPrice) noexcept
 {
-    price_ = std::make_shared<std::string>(pPrice);
-    dirtyFlag_[6] = true;
-}
-void Books::setPrice(std::string &&pPrice) noexcept
-{
-    price_ = std::make_shared<std::string>(std::move(pPrice));
+    price_ = std::make_shared<int64_t>(pPrice);
     dirtyFlag_[6] = true;
 }
 
@@ -1365,7 +1360,7 @@ Json::Value Books::toJson() const
     if(getPrice())
     {
 
-        ret["price"]=getValueOfPrice();
+        ret["price"]=(Json::Int64)getValueOfPrice();
 
     }
     else
@@ -1499,7 +1494,7 @@ Json::Value Books::toMasqueradedJson(
             if(getPrice())
             {
 
-                ret[pMasqueradingVector[6]]=getValueOfPrice();
+                ret[pMasqueradingVector[6]]=(Json::Int64)getValueOfPrice();
 
             }
             else
@@ -1609,7 +1604,7 @@ Json::Value Books::toMasqueradedJson(
     if(getPrice())
     {
 
-        ret["price"]=getValueOfPrice();
+        ret["price"]=(Json::Int64)getValueOfPrice();
 
     }
     else
@@ -2112,7 +2107,7 @@ bool Books::validJsonOfField(size_t index,
                 return false;
             }
 
-            if(!pJson.isString())
+            if(!pJson.isInt64())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

@@ -1,4 +1,5 @@
 #include "OrdersController.h"
+#include "utils/MoneyJson.hpp"
 #include "input/OrderInputs.hpp"
 #include "utils/Errors.hpp"
 
@@ -11,7 +12,7 @@ Task<drogon_model::bookstore::Orders> OrdersController::ownOrder(const std::stri
 Task<HttpResponsePtr> OrdersController::MyOrders(HttpRequestPtr req) {
     const auto userId = req->attributes()->get<std::string>("id");
     auto orders = co_await services_->orderService->getOrdersByUser(userId);
-    co_return res::success(res::toJsonArray(orders));
+    co_return res::success(res::toJsonArray(orders, orderJson));
 }
 
 Task<HttpResponsePtr> OrdersController::CreateOrder(HttpRequestPtr req) {
@@ -22,13 +23,13 @@ Task<HttpResponsePtr> OrdersController::CreateOrder(HttpRequestPtr req) {
 
     const auto userId = req->attributes()->get<std::string>("id");
     auto order = co_await services_->orderService->createOrder(userId, std::get<CreateOrderInput>(parsed));
-    co_return res::success(order.toJson(), k201Created);
+    co_return res::success(orderJson(order), k201Created);
 }
 
 Task<HttpResponsePtr> OrdersController::GetOrder(HttpRequestPtr req, std::string id) {
     const auto userId = req->attributes()->get<std::string>("id");
     auto order = co_await ownOrder(userId, id);
-    co_return res::success(order.toJson());
+    co_return res::success(orderJson(order));
 }
 
 Task<HttpResponsePtr> OrdersController::DeleteOrder(HttpRequestPtr req, std::string id) {
@@ -41,5 +42,5 @@ Task<HttpResponsePtr> OrdersController::DeleteOrder(HttpRequestPtr req, std::str
 Task<HttpResponsePtr> OrdersController::PayOrder(HttpRequestPtr req, std::string id) {
     const auto userId = req->attributes()->get<std::string>("id");
     auto payment = co_await services_->paymentService->createPayment(userId, id);
-    co_return res::success(payment.toJson(), k201Created);
+    co_return res::success(paymentJson(payment), k201Created);
 }
