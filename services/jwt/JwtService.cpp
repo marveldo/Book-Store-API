@@ -2,21 +2,6 @@
 #include <jwt-cpp/traits/nlohmann-json/defaults.h>
 
 
-
-namespace {
-     auto conversion = [](const std::string& str) -> std::chrono::seconds {
-        if (str.empty()) return std::chrono::seconds(0);
-        char unit = str.back();
-        int value = std::stoi(str.substr(0, str.size() - 1));
-        switch (unit) {
-            case 's': return std::chrono::seconds(value);
-            case 'm': return std::chrono::minutes(value);
-            case 'h': return std::chrono::hours(value);
-            case 'd': return std::chrono::hours(value * 24);
-            default: throw std::invalid_argument("Invalid time unit in expiration string");
-      }};
-}
-
 std::string JwtService::generateAccessToken(Claims& claims) {
      std::string token =jwt::create()
             .set_type("JWS")
