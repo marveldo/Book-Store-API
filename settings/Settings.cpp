@@ -33,6 +33,19 @@ Settings* getSettings() {
     s->jwt.refreshSecret = dotenv::require("JWT_REFRESH_SECRET");
     s->jwt.accessExpiration  = dotenv::require("JWT_ACCESS_EXPIRATION");
     s->jwt.refreshExpiration = dotenv::require("JWT_REFRESH_EXPIRATION");
+    s->redis.host        = dotenv::get_or("REDIS_HOST", "127.0.0.1");
+    s->redis.port        = toInt("REDIS_PORT", "6379");
+    s->redis.password    = dotenv::get_or("REDIS_PASSWORD", "");
+    s->redis.maxAttempts = toInt("QUEUE_MAX_ATTEMPTS", "3");
+    s->redis.maxInFlight = toInt("QUEUE_MAX_IN_FLIGHT", "10");
+    s->email.resendApiKey = dotenv::require("RESEND_API_KEY");
+    s->email.from         = dotenv::require("EMAIL_FROM");
+    s->email.templatesDir = dotenv::get_or("EMAIL_TEMPLATES_DIR", "templates/emails");
+    s->email.appUrl       = dotenv::get_or("APP_URL", "http://localhost:3000");
+    s->email.assetsUrl    = dotenv::get_or("ASSETS_URL", "");
+    s->cloudinary.cloudName = dotenv::require("CLOUDINARY_CLOUD_NAME");
+    s->cloudinary.apiKey    = dotenv::require("CLOUDINARY_API_KEY");
+    s->cloudinary.apiSecret = dotenv::require("CLOUDINARY_API_SECRET");
 
     if (s->port < 1 || s->port > 65535) throw std::runtime_error("PORT out of range");
 

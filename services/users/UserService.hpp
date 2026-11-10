@@ -3,6 +3,7 @@
 #include <drogon/utils/coroutine.h>
 #include "models/Users.h"
 #include "input/UserInputs.hpp"
+#include "events/EventBus.hpp"
 #include <string>
 
 
@@ -11,7 +12,7 @@
 
 class UserService {
     public :
-       explicit UserService(drogon::orm::DbClientPtr dbClient) : dbClient_(std::move(dbClient)) {};
+       UserService(drogon::orm::DbClientPtr dbClient, EventBus* events) : dbClient_(std::move(dbClient)), events_(events) {};
 
        drogon::Task<std::vector<drogon_model::bookstore::Users>> getAllUsers();
        
@@ -25,11 +26,12 @@ class UserService {
 
        drogon::Task<bool> deleteUser(const std::string& id);
 
-       std::string hashPassword(const std::string& password);
+       drogon::Task<std::string> hashPassword(std::string password);
 
-       bool verifyPassword(const std::string& password, const std::string& hash);
+       drogon::Task<bool> verifyPassword(std::string password, std::string hash);
 
 
     private:
        drogon::orm::DbClientPtr dbClient_;
+       EventBus* events_;
 };

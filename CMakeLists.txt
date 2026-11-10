@@ -73,6 +73,9 @@ aux_source_directory(settings SETTINGS_SRC)
 aux_source_directory(utils UTILS_SRC)
 aux_source_directory(bootstrap BOOTSTRAP_SRC)
 aux_source_directory(middleware MIDDLEWARE_SRC)
+aux_source_directory(events EVENTS_SRC)
+aux_source_directory(queues QUEUES_SRC)
+aux_source_directory(queues/handlers HANDLERS_SRC)
 # To read every file in every folders of services 
 file(GLOB_RECURSE SERVICES_SRC CONFIGURE_DEPENDS services/*.cpp services/*.cc)
 
@@ -97,9 +100,20 @@ target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::SODIUM)
 set(JWT_BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)   # don't build its examples
 set(JWT_DISABLE_PICOJSON ON  CACHE BOOL "" FORCE)   # we use nlohmann, not picojson
 
-FetchContent_MakeAvailable(nlohmann_json jwt-cpp)
+FetchContent_Declare(inja
+    GIT_REPOSITORY https://github.com/pantor/inja.git
+    GIT_TAG        v3.5.0
+    GIT_SHALLOW    TRUE)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json jwt-cpp::jwt-cpp)
+set(INJA_USE_EMBEDDED_JSON OFF CACHE BOOL "" FORCE)
+set(INJA_BUILD_TESTS       OFF CACHE BOOL "" FORCE)
+set(INJA_INSTALL           OFF CACHE BOOL "" FORCE)
+set(INJA_EXPORT            OFF CACHE BOOL "" FORCE)
+
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(nlohmann_json jwt-cpp inja)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json jwt-cpp::jwt-cpp pantor::inja)
 
 drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
                     ${CMAKE_CURRENT_BINARY_DIR})
@@ -126,6 +140,9 @@ target_sources(${PROJECT_NAME}
                ${SERVICES_SRC}
                ${BOOTSTRAP_SRC}
                ${MIDDLEWARE_SRC}
+               ${EVENTS_SRC}
+               ${QUEUES_SRC}
+               ${HANDLERS_SRC}
                )
 # ##############################################################################
 # uncomment the following line for dynamically loading views

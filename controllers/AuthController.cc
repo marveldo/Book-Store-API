@@ -16,7 +16,7 @@ Task<HttpResponsePtr> AuthController::Login(HttpRequestPtr req) {
     } catch (const drogon::orm::UnexpectedRows&) {
     }
 
-    if (!user || !services_->userService->verifyPassword(input.password, user->getValueOfPasswordHash())) {
+    if (!user || !co_await services_->userService->verifyPassword(input.password, user->getValueOfPasswordHash())) {
         co_return res::error(drogon::k401Unauthorized, "Invalid email or password");
     }
 

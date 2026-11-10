@@ -6,6 +6,8 @@
 #include "payments/Payments.hpp"
 #include "jwt/JwtService.hpp"
 #include "settings/Settings.h"
+#include "events/EventBus.hpp"
+#include "media/CloudinaryService.hpp"
 #include <drogon/orm/DbClient.h>
 
 class Services {
@@ -16,13 +18,19 @@ class Services {
         UserSettingsService* userSettingsService;
         PaymentService* paymentService;
         JwtService* jwtService;
+        CloudinaryService* cloudinaryService;
 
-    explicit Services(drogon::orm::DbClientPtr dbClient, Settings& settings) {
-        userService = new UserService(dbClient);
-        bookService = new BookService(dbClient);
-        orderService = new OrderService(dbClient);
-        userSettingsService = new UserSettingsService(dbClient);
-        paymentService = new PaymentService(dbClient);
+    explicit Services(drogon::orm::DbClientPtr dbClient, Settings& settings, EventBus* events) {
+        userService = new UserService(dbClient, events);
+        bookService = new BookService(dbClient, events);
+        orderService = new OrderService(dbClient, events);
+        userSettingsService = new UserSettingsService(dbClient, events);
+        paymentService = new PaymentService(dbClient, events);
+        cloudinaryService = new CloudinaryService(
+            settings.cloudinary.cloudName,
+            settings.cloudinary.apiKey,
+            settings.cloudinary.apiSecret
+        );
         jwtService = new JwtService(
             settings.jwt.accessSecret, 
             settings.jwt.refreshSecret, 
@@ -38,7 +46,8 @@ class Services {
         delete userSettingsService;
         delete paymentService;
         delete jwtService;
+        delete cloudinaryService;
     }
 };
 
-Services* getServices(drogon::orm::DbClientPtr dbClient, Settings& settings) ;
+Services* getServices(drogon::orm::DbClientPtr dbClient, Settings& settings, EventBus* events);

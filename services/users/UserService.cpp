@@ -4,6 +4,7 @@
 #include <drogon/utils/coroutine.h>
 #include "utils/Security.hpp"
 #include "utils/Errors.hpp"
+#include "events/Events.hpp"
 
 using namespace drogon::orm;
 using namespace drogon_model::bookstore;
@@ -26,8 +27,11 @@ Task<Users> UserService::getUserById(const std::string& id) {
 
     CoroMapper<Users> users(dbClient_);
 
-    auto user = co_await users.findByPrimaryKey(id);
-
+    auto user = co_await users.findOne(
+        Criteria(Users::Cols::_id,        CompareOperator::EQ, id) &&
+        Criteria(Users::Cols::_is_active, CompareOperator::EQ, true)
+    );
+    
     co_return user;
 
 }
@@ -49,11 +53,13 @@ Task<Users> UserService::createUser(const CreateUserInput& input) {
 
     newUser.setEmail(input.email);
     
-    newUser.setPasswordHash(hashPassword(input.password));
+    newUser.setPasswordHash(co_await hashPassword(input.password));
     // TODO: newUser.setPasswordHash(password::hash(input.password)); once libsodium is set up.
     // Until then the insert fails, because password_hash is NOT NULL. Never store input.password as-is.
     
     auto createdUser = co_await users.insert(newUser);
+
+    events_->Publish(USER_CREATED, UserCreated{createdUser.getValueOfId(), createdUser.getValueOfEmail(), createdUser.getValueOfUsername()});
 
     co_return createdUser;
 
@@ -101,12 +107,12 @@ Task<Users> UserService::getUserByCredentials(const LoginUserInput& input){
     co_return user;
 }
 
-std::string UserService::hashPassword(const std::string& password) {
-    return security::hash(password);
+Task<std::string> UserService::hashPassword(std::string password) {
+    co_return co_await security::hashAsync(std::move(password));
 }
 
-bool UserService::verifyPassword(const std::string& password, const std::string& hash) {
-    return security::verify(password, hash);
+Task<bool> UserService::verifyPassword(std::string password, std::string hash) {
+    co_return co_await security::verifyAsync(std::move(password), std::move(hash));
 }
 
 

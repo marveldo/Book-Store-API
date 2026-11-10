@@ -1,13 +1,14 @@
 #pragma once
 #include <drogon/orm/DbClient.h>
 #include <drogon/utils/coroutine.h>
+#include "events/EventBus.hpp"
 #include "models/UserSettings.h"
 #include "input/UserSettingsInputs.hpp"
 #include <string>
 
 class UserSettingsService {
     public:
-       explicit UserSettingsService(drogon::orm::DbClientPtr dbClient) : dbClient_(std::move(dbClient)) {}
+       UserSettingsService(drogon::orm::DbClientPtr dbClient, EventBus* events) : dbClient_(std::move(dbClient)), events_(events) {}
 
        drogon::Task<drogon_model::bookstore::UserSettings> getSettingsByUserId(const std::string& userId);
 
@@ -18,4 +19,5 @@ class UserSettingsService {
 
     private:
        drogon::orm::DbClientPtr dbClient_;
+       EventBus* events_;
 };

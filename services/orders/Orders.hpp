@@ -1,6 +1,7 @@
 #pragma once
 #include <drogon/orm/DbClient.h>
 #include <drogon/utils/coroutine.h>
+#include "events/EventBus.hpp"
 #include "models/Orders.h"
 #include "input/OrderInputs.hpp"
 #include <string>
@@ -8,7 +9,7 @@
 
 class OrderService {
     public:
-       explicit OrderService(drogon::orm::DbClientPtr dbClient) : dbClient_(std::move(dbClient)) {}
+       OrderService(drogon::orm::DbClientPtr dbClient, EventBus* events) : dbClient_(std::move(dbClient)), events_(events) {}
 
        drogon::Task<std::vector<drogon_model::bookstore::Orders>> getOrdersByUser(const std::string& userId);
 
@@ -20,4 +21,5 @@ class OrderService {
 
     private:
        drogon::orm::DbClientPtr dbClient_;
+       EventBus* events_;
 };

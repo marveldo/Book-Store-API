@@ -33,6 +33,7 @@ Task<Books> BookService::createBook(const CreateBookInput& input) {
     if (input.isbn)          book.setIsbn(*input.isbn);
     if (input.description)   book.setDescription(*input.description);
     if (input.publishedYear) book.setPublishedYear(static_cast<short>(*input.publishedYear));
+    if (input.cover)         book.setCoverKey(*input.cover);
 
     co_return co_await books.insert(book);
 }
@@ -47,6 +48,7 @@ Task<Books> BookService::updateBook(const std::string& id, const UpdateBookInput
     if (input.isbn)          book.setIsbn(*input.isbn);
     if (input.description)   book.setDescription(*input.description);
     if (input.publishedYear) book.setPublishedYear(static_cast<short>(*input.publishedYear));
+    if (input.cover)         book.setCoverKey(*input.cover);
 
     co_await books.update(book);
     co_return co_await getBookById(id);

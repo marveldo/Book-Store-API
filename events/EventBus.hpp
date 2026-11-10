@@ -38,5 +38,3 @@ private:
   std::unordered_map<std::string, std::vector<std::function<void(const std::any&)>>> events_;
   std::shared_mutex mtx_;
 };
-
-void RegisterEvents(EventBus *eventOBj);

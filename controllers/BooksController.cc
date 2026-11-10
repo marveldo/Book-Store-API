@@ -25,7 +25,13 @@ Task<HttpResponsePtr> BooksController::CreateBook(HttpRequestPtr req) {
         co_return res::badRequest(*errors);
     }
 
-    auto book = co_await services_->bookService->createBook(std::get<CreateBookInput>(parsed));
+    const auto& input = std::get<CreateBookInput>(parsed);
+
+    if (input.cover && !co_await services_->cloudinaryService->exists(*input.cover)) {
+        co_return res::badRequest(std::vector<FieldError>{{"cover", "no uploaded image found for this cover"}});
+    }
+
+    auto book = co_await services_->bookService->createBook(input);
     co_return res::success(bookJson(book), k201Created);
 }
 
@@ -35,7 +41,13 @@ Task<HttpResponsePtr> BooksController::UpdateBook(HttpRequestPtr req, std::strin
         co_return res::badRequest(*errors);
     }
 
-    auto book = co_await services_->bookService->updateBook(id, std::get<UpdateBookInput>(parsed));
+    const auto& input = std::get<UpdateBookInput>(parsed);
+
+    if (input.cover && !co_await services_->cloudinaryService->exists(*input.cover)) {
+        co_return res::badRequest(std::vector<FieldError>{{"cover", "no uploaded image found for this cover"}});
+    }
+
+    auto book = co_await services_->bookService->updateBook(id, input);
     co_return res::success(bookJson(book));
 }
 
@@ -50,4 +62,16 @@ Task<HttpResponsePtr> BooksController::MyBooks(HttpRequestPtr req) {
     const auto userId = req->attributes()->get<std::string>("id");
     auto books = co_await services_->bookService->getBooksByUser(userId);
     co_return res::success(res::toJsonArray(books, bookJson));
+}
+
+Task<HttpResponsePtr> BooksController::CoverSignature(HttpRequestPtr) {
+    const std::string publicId = "covers/" + drogon::utils::getUuid();
+    UploadSignature signature = services_->cloudinaryService->signUpload(publicId);
+
+    Json::Value data;
+    data["upload_url"] = signature.uploadUrl;
+    for (size_t i = 0; i < signature.fields.size(); i++) {
+        data["fields"][signature.fields[i].first] = signature.fields[i].second;
+    }
+    co_return res::success(data);
 }

@@ -56,6 +56,7 @@ class Books
         static const std::string _price;
         static const std::string _created_at;
         static const std::string _updated_at;
+        static const std::string _cover_key;
 
     };
 
@@ -192,9 +193,19 @@ class Books
     ///Set the value of the column updated_at
     void setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept;
 
+    /**  For column cover_key  */
+    ///Get the value of the column cover_key, returns the default value if the column is null
+    const std::string &getValueOfCoverKey() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getCoverKey() const noexcept;
+    ///Set the value of the column cover_key
+    void setCoverKey(const std::string &pCoverKey) noexcept;
+    void setCoverKey(std::string &&pCoverKey) noexcept;
+    void setCoverKeyToNull() noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 9;  }
+
+    static size_t getColumnNumber() noexcept {  return 10;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -226,6 +237,7 @@ class Books
     std::shared_ptr<int64_t> price_;
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
+    std::shared_ptr<std::string> coverKey_;
 
     struct MetaData
     {
@@ -238,7 +250,7 @@ class Books
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[9]={ false };
+    bool dirtyFlag_[10]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -319,6 +331,12 @@ class Books
         if(!dirtyFlag_[8])
         {
             needSelection=true;
+        }
+
+        if(dirtyFlag_[9])
+        {
+            sql += "cover_key,";
+            ++parametersCount;
         }
 
         if(parametersCount > 0)
@@ -424,6 +442,14 @@ class Books
         else
         {
             sql +="default,";
+        }
+
+        if(dirtyFlag_[9])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
         }
 
         if(parametersCount > 0)

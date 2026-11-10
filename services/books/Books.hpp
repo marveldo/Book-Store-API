@@ -1,6 +1,7 @@
 #pragma once
 #include <drogon/orm/DbClient.h>
 #include <drogon/utils/coroutine.h>
+#include "events/EventBus.hpp"
 #include "models/Books.h"
 #include "models/UserBooks.h"
 #include "input/BookInputs.hpp"
@@ -9,7 +10,7 @@
 
 class BookService {
     public:
-       explicit BookService(drogon::orm::DbClientPtr dbClient) : dbClient_(std::move(dbClient)) {}
+       BookService(drogon::orm::DbClientPtr dbClient, EventBus* events) : dbClient_(std::move(dbClient)), events_(events) {}
 
        // catalogue
        drogon::Task<std::vector<drogon_model::bookstore::Books>> getAllBooks(size_t page, size_t perPage);
@@ -31,4 +32,5 @@ class BookService {
 
     private:
        drogon::orm::DbClientPtr dbClient_;
+       EventBus* events_;
 };

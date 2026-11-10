@@ -4,10 +4,14 @@
 #include "models/Orders.h"
 #include "models/Payments.h"
 #include "utils/Money.hpp"
+#include "utils/Media.hpp"
 
 inline Json::Value bookJson(const drogon_model::bookstore::Books& book) {
     Json::Value json = book.toJson();
     json["price"] = money::toMajor(book.getValueOfPrice());
+    if (json.isMember("cover_key") && json["cover_key"].isString()) {
+        json["cover_url"] = imageUrl(json["cover_key"].asString());
+    }
     return json;
 }
 

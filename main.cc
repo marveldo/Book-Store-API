@@ -49,7 +49,7 @@ int main() {
          
     },{Get});
 
-    Services* service = getServices(ctx->db, *ctx->settings);
+    Services* service = getServices(ctx->db, *ctx->settings, ctx->events);
     drogon::app().registerMiddleware(std::make_shared<JwtMiddleWare>(service));
     drogon::app().registerMiddleware(std::make_shared<AdminMiddleware>(service));
     drogon::app().registerController(std::make_shared<UsersController>(service));

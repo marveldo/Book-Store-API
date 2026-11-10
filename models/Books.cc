@@ -37,6 +37,8 @@ const std::string Books::Cols::_created_at = "\"created_at\"";
 
 const std::string Books::Cols::_updated_at = "\"updated_at\"";
 
+const std::string Books::Cols::_cover_key = "\"cover_key\"";
+
 
 const std::string Books::primaryKeyName = "id";
 
@@ -54,7 +56,8 @@ const std::vector<typename Books::MetaData> Books::metaData_={
 {"published_year","short","smallint",2,0,0,0},
 {"price","int64_t","bigint",8,0,0,1},
 {"created_at","::trantor::Date","timestamp with time zone",0,0,0,1},
-{"updated_at","::trantor::Date","timestamp with time zone",0,0,0,1}
+{"updated_at","::trantor::Date","timestamp with time zone",0,0,0,1},
+{"cover_key","std::string","text",0,0,0,0}
 
 };
 const std::string &Books::getColumnName(size_t index) noexcept(false)
@@ -164,11 +167,18 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
             }
         }
 
+        if(!r["cover_key"].isNull())
+        {
+
+            coverKey_=std::make_shared<std::string>(r["cover_key"].as<std::string>());
+
+        }
+
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 9 > r.size())
+        if(offset + 10 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -281,13 +291,21 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
             }
         }
 
+        index = offset + 9;
+        if(!r[index].isNull())
+        {
+
+            coverKey_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
     }
 
 }
 
 Books::Books(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -409,6 +427,15 @@ Books::Books(const Json::Value &pJson, const std::vector<std::string> &pMasquera
                 }
                 updatedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
+        }
+    }
+
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            coverKey_=std::make_shared<std::string>(pJson[pMasqueradingVector[9]].asString());
         }
     }
 
@@ -536,12 +563,21 @@ Books::Books(const Json::Value &pJson) noexcept(false)
         }
     }
 
+    if(pJson.isMember("cover_key"))
+    {
+        dirtyFlag_[9]=true;
+        if(!pJson["cover_key"].isNull())
+        {
+            coverKey_=std::make_shared<std::string>(pJson["cover_key"].asString());
+        }
+    }
+
 }
 
 void Books::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -665,6 +701,15 @@ void Books::updateByMasqueradedJson(const Json::Value &pJson,
         }
     }
 
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            coverKey_=std::make_shared<std::string>(pJson[pMasqueradingVector[9]].asString());
+        }
+    }
+
 }
 
 void Books::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -785,6 +830,15 @@ void Books::updateByJson(const Json::Value &pJson) noexcept(false)
                 }
                 updatedAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
+        }
+    }
+
+    if(pJson.isMember("cover_key"))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson["cover_key"].isNull())
+        {
+            coverKey_=std::make_shared<std::string>(pJson["cover_key"].asString());
         }
     }
 
@@ -988,6 +1042,33 @@ void Books::setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept
     dirtyFlag_[8] = true;
 }
 
+const std::string &Books::getValueOfCoverKey() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(coverKey_)
+        return *coverKey_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Books::getCoverKey() const noexcept
+{
+    return coverKey_;
+}
+void Books::setCoverKey(const std::string &pCoverKey) noexcept
+{
+    coverKey_ = std::make_shared<std::string>(pCoverKey);
+    dirtyFlag_[9] = true;
+}
+void Books::setCoverKey(std::string &&pCoverKey) noexcept
+{
+    coverKey_ = std::make_shared<std::string>(std::move(pCoverKey));
+    dirtyFlag_[9] = true;
+}
+void Books::setCoverKeyToNull() noexcept
+{
+    coverKey_.reset();
+    dirtyFlag_[9] = true;
+}
+
 void Books::updateId(const uint64_t id)
 {
 }
@@ -1004,7 +1085,8 @@ const std::vector<std::string> &Books::insertColumns() noexcept
         "published_year",
         "price",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "cover_key"
 
     };
     return inCols;
@@ -1121,6 +1203,18 @@ void Books::outputArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[9])
+    {
+        if(getCoverKey())
+        {
+            binder << getValueOfCoverKey();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 
 const std::vector<std::string> Books::updateColumns() const
@@ -1170,6 +1264,11 @@ const std::vector<std::string> Books::updateColumns() const
     if(dirtyFlag_[8])
     {
         ret.push_back(getColumnName(8));
+    }
+
+    if(dirtyFlag_[9])
+    {
+        ret.push_back(getColumnName(9));
     }
 
     return ret;
@@ -1286,6 +1385,18 @@ void Books::updateArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[9])
+    {
+        if(getCoverKey())
+        {
+            binder << getValueOfCoverKey();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 Json::Value Books::toJson() const
 {
@@ -1390,6 +1501,17 @@ Json::Value Books::toJson() const
         ret["updated_at"]=Json::Value();
     }
 
+    if(getCoverKey())
+    {
+
+        ret["cover_key"]=getValueOfCoverKey();
+
+    }
+    else
+    {
+        ret["cover_key"]=Json::Value();
+    }
+
     return ret;
 }
 
@@ -1402,7 +1524,7 @@ Json::Value Books::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 9)
+    if(pMasqueradingVector.size() == 10)
     {
 
         if(!pMasqueradingVector[0].empty())
@@ -1531,6 +1653,20 @@ Json::Value Books::toMasqueradedJson(
             }
         }
 
+        if(!pMasqueradingVector[9].empty())
+        {
+            if(getCoverKey())
+            {
+
+                ret[pMasqueradingVector[9]]=getValueOfCoverKey();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[9]]=Json::Value();
+            }
+        }
+
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1634,6 +1770,17 @@ Json::Value Books::toMasqueradedJson(
         ret["updated_at"]=Json::Value();
     }
 
+    if(getCoverKey())
+    {
+
+        ret["cover_key"]=getValueOfCoverKey();
+
+    }
+    else
+    {
+        ret["cover_key"]=Json::Value();
+    }
+
     return ret;
 }
 
@@ -1706,13 +1853,19 @@ bool Books::validateJsonForCreation(const Json::Value &pJson, std::string &err)
             return false;
     }
 
+    if(pJson.isMember("cover_key"))
+    {
+        if(!validJsonOfField(9, "cover_key", pJson["cover_key"], err, true))
+            return false;
+    }
+
     return true;
 }
 bool Books::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                const std::vector<std::string> &pMasqueradingVector,
                                                std::string &err)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1821,6 +1974,16 @@ bool Books::validateMasqueradedJsonForCreation(const Json::Value &pJson,
 
       }
 
+      if(!pMasqueradingVector[9].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[9]))
+          {
+              if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, true))
+                  return false;
+          }
+
+      }
+
     }
     catch(const Json::LogicError &e)
     {
@@ -1892,13 +2055,19 @@ bool Books::validateJsonForUpdate(const Json::Value &pJson, std::string &err)
             return false;
     }
 
+    if(pJson.isMember("cover_key"))
+    {
+        if(!validJsonOfField(9, "cover_key", pJson["cover_key"], err, false))
+            return false;
+    }
+
     return true;
 }
 bool Books::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                              const std::vector<std::string> &pMasqueradingVector,
                                              std::string &err)
 {
-    if(pMasqueradingVector.size() != 9)
+    if(pMasqueradingVector.size() != 10)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1962,6 +2131,12 @@ bool Books::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
       {
           if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+      {
+          if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, false))
               return false;
       }
 
@@ -2137,6 +2312,21 @@ bool Books::validJsonOfField(size_t index,
             {
                 err="The " + fieldName + " column cannot be null";
                 return false;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 9:
+
+            if(pJson.isNull())
+            {
+                return true;
             }
 
             if(!pJson.isString())
