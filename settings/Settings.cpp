@@ -44,60 +44,6 @@ namespace {
         return text;
     }
 
-    // %40 -> @ etc. Passwords in URLs have their special characters encoded.
-    std::string percentDecode(const std::string& in) {
-        std::string out;
-        for (size_t i = 0; i < in.size(); i++) {
-            if (in[i] == '%' && i + 2 < in.size() && std::isxdigit(static_cast<unsigned char>(in[i + 1])) && std::isxdigit(static_cast<unsigned char>(in[i + 2]))) {
-                out += static_cast<char>(std::stoi(in.substr(i + 1, 2), nullptr, 16));
-                i += 2;
-            } else {
-                out += in[i];
-            }
-        }
-        return out;
-    }
-
-    // redis://[user][:password@]host[:port][/db], the form Render's Key Value gives you.
-    void applyRedisUrl(const std::string& url, RedisSettings& redis) {
-        std::string rest = url;
-        const auto scheme = rest.find("://");
-        if (scheme == std::string::npos) throw std::runtime_error("REDIS_URL must look like redis://host:port");
-        if (rest.substr(0, scheme) == "rediss") {
-            // Fail loudly: otherwise the server starts and the queue silently never connects.
-            throw std::runtime_error("REDIS_URL uses rediss:// (TLS), which Drogon's Redis client doesn't support. "
-                                     "Use a Redis that accepts plain redis:// connections (e.g. Render Key Value, Redis Cloud).");
-        }
-        if (rest.substr(0, scheme) != "redis") throw std::runtime_error("REDIS_URL must start with redis://");
-        rest = rest.substr(scheme + 3);
-
-        if (const auto slash = rest.find('/'); slash != std::string::npos) {
-            const std::string db = rest.substr(slash + 1);
-            if (!db.empty()) {
-                try { redis.db = std::stoi(db); }
-                catch (...) { throw std::runtime_error("REDIS_URL: database after '/' must be a number, got '" + db + "'"); }
-            }
-            rest = rest.substr(0, slash);
-        }
-
-        if (const auto at = rest.rfind('@'); at != std::string::npos) {
-            const std::string credentials = rest.substr(0, at);
-            const auto colon = credentials.find(':');
-            if (colon == std::string::npos) {
-                redis.password = percentDecode(credentials);          // redis://password@host
-            } else {
-                redis.username = percentDecode(credentials.substr(0, colon));
-                redis.password = percentDecode(credentials.substr(colon + 1));
-                if (redis.username == "default") redis.username.clear();   // AUTH <password> is the same thing
-            }
-            rest = rest.substr(at + 1);
-        }
-        if (const auto colon = rest.rfind(':'); colon != std::string::npos) {
-            redis.port = std::stoi(rest.substr(colon + 1));
-            rest = rest.substr(0, colon);
-        }
-        redis.host = rest;
-    }
 }
 
 Settings* getSettings() {
@@ -128,8 +74,7 @@ Settings* getSettings() {
     s->redis.port        = toInt("REDIS_PORT", "6379");
     s->redis.password    = dotenv::get_or("REDIS_PASSWORD", "");
     s->redis.username    = dotenv::get_or("REDIS_USERNAME", "");
-    s->redis.db          = toInt("REDIS_DB", "0");
-    if (auto url = dotenv::get("REDIS_URL"); url && !url->empty()) applyRedisUrl(*url, s->redis);   // Render
+    s->redis.db          = toInt("REDIS_DB", "0"); 
     s->redis.host        = resolveHost("REDIS_HOST", s->redis.host);
     s->redis.maxAttempts = toInt("QUEUE_MAX_ATTEMPTS", "3");
     s->redis.maxInFlight = toInt("QUEUE_MAX_IN_FLIGHT", "10");
