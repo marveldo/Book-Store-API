@@ -14,6 +14,9 @@ FROM ubuntu:24.04 AS build
 ARG DEBIAN_FRONTEND=noninteractive
 ARG DROGON_VERSION=v1.9.14
 ARG MIGRATE_VERSION=v4.18.3
+# How many files compile at once. Each C++ compile here can use 1-2 GB of RAM, and Ninja
+# otherwise runs one per CPU core, which blew past the 8 GB limit on Render's build machine.
+ARG BUILD_JOBS=2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build git pkg-config ca-certificates curl \
@@ -33,7 +36,7 @@ RUN git clone --depth 1 --branch ${DROGON_VERSION} --recurse-submodules --shallo
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20 \
         -DBUILD_EXAMPLES=OFF -DBUILD_CTL=OFF -DBUILD_TESTING=OFF \
         -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=ON -DBUILD_MYSQL=OFF -DBUILD_SQLITE=OFF \
-    && cmake --build /tmp/drogon/build \
+    && cmake --build /tmp/drogon/build --parallel ${BUILD_JOBS} \
     && cmake --install /tmp/drogon/build \
     && rm -rf /tmp/drogon
 
@@ -45,7 +48,7 @@ WORKDIR /src
 COPY . .
 # CMAKE_CXX_STANDARD=20: the CMakeLists only detects C++20 if the compiler defaults to it, and GCC 13 doesn't.
 RUN cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20 \
-    && cmake --build build --target cpp_server
+    && cmake --build build --target cpp_server --parallel ${BUILD_JOBS}
 
 # ---------------------------------------------------------------------------
 # Run

@@ -561,6 +561,7 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all,visualstudio,visualstudiocode,cmake,c,c++
 # ---- secrets / generated from .env (see scripts/gen_models.*) ----
 .env
+.env.*
 models/model.json
 uploads
 build
