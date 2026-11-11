@@ -1,15 +1,17 @@
 #include "TaskQueue.hpp"
+#include "TaskErrors.hpp"
 #include <trantor/utils/Logger.h>
 #include <optional>
 
 using drogon::nosql::RedisClient;
 using drogon::nosql::RedisResult;
 
-TaskQueue::TaskQueue(const std::string& host, int port, const std::string& password, int maxAttempts, int maxInFlight)
+TaskQueue::TaskQueue(const std::string& host, int port, const std::string& password, int maxAttempts, int maxInFlight,
+                     const std::string& username, int db)
     : loopThread_("TaskQueue"), maxAttempts_(maxAttempts), maxInFlight_(maxInFlight) {
     const trantor::InetAddress address(host, static_cast<uint16_t>(port));
-    producer_ = RedisClient::newRedisClient(address, 2, password);
-    consumer_ = RedisClient::newRedisClient(address, 1, password);
+    producer_ = RedisClient::newRedisClient(address, 2, password, static_cast<unsigned int>(db), username);
+    consumer_ = RedisClient::newRedisClient(address, 1, password, static_cast<unsigned int>(db), username);
     loopThread_.run();
 }
 
@@ -21,8 +23,8 @@ trantor::EventLoop* TaskQueue::loop() {
     return loopThread_.getLoop();
 }
 
-void TaskQueue::registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares) {
-    handlers_[type] = Entry{std::move(handler), std::move(middlewares)};
+void TaskQueue::registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares, OnDead onDead) {
+    handlers_[type] = Entry{std::move(handler), std::move(middlewares), std::move(onDead)};
 }
 
 void TaskQueue::start() {
@@ -90,21 +92,39 @@ drogon::AsyncTask TaskQueue::execute(std::string raw) {
                 value = task.dump();
             } else {
                 std::string error;
+                bool failed    = false;
+                bool permanent = false;
                 try {
                     co_await run(it->second, task["payload"], 0);
+                } catch (const PermanentTaskError& e) {
+                    error = e.what();
+                    failed = permanent = true;
                 } catch (const std::exception& e) {
                     error = e.what();
+                    failed = true;
                 } catch (...) {
                     error = "unknown error";
+                    failed = true;
                 }
 
-                if (!error.empty()) {
+                if (failed) {
                     const int attempts = task.value("attempts", 0) + 1;
                     task["attempts"]   = attempts;
                     task["last_error"] = error;
-                    list  = attempts < maxAttempts_ ? QUEUE : DEAD;
+                    list  = (!permanent && attempts < maxAttempts_) ? QUEUE : DEAD;
                     value = task.dump();
-                    if (list == DEAD) LOG_WARN << "TaskQueue: " << type << " failed " << attempts << " times, moved to " << DEAD;
+
+                    if (list == DEAD) {
+                        LOG_WARN << "TaskQueue: " << type << (permanent ? " failed permanently" : " failed " + std::to_string(attempts) + " times")
+                                 << ", moved to " << DEAD << ": " << error;
+                        if (it->second.onDead) {
+                            try {
+                                co_await it->second.onDead(task["payload"], error);
+                            } catch (const std::exception& e) {
+                                LOG_ERROR << "TaskQueue: cleanup for " << type << " failed: " << e.what();
+                            }
+                        }
+                    }
                 }
             }
         }

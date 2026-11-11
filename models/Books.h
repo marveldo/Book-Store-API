@@ -41,6 +41,8 @@ namespace bookstore
 {
 
 
+class Users;
+
 
 class Books
 {
@@ -57,6 +59,7 @@ class Books
         static const std::string _created_at;
         static const std::string _updated_at;
         static const std::string _cover_key;
+        static const std::string _owner_id;
 
     };
 
@@ -203,15 +206,30 @@ class Books
     void setCoverKey(std::string &&pCoverKey) noexcept;
     void setCoverKeyToNull() noexcept;
 
+    /**  For column owner_id  */
+    ///Get the value of the column owner_id, returns the default value if the column is null
+    const std::string &getValueOfOwnerId() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getOwnerId() const noexcept;
+    ///Set the value of the column owner_id
+    void setOwnerId(const std::string &pOwnerId) noexcept;
+    void setOwnerId(std::string &&pOwnerId) noexcept;
+    void setOwnerIdToNull() noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 10;  }
+
+    static size_t getColumnNumber() noexcept {  return 11;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
     std::string toString() const;
     Json::Value toMasqueradedJson(const std::vector<std::string> &pMasqueradingVector) const;
     /// Relationship interfaces
+
+    Users getUsers(const drogon::orm::DbClientPtr &clientPtr) const;
+    void getUsers(const drogon::orm::DbClientPtr &clientPtr,
+                  const std::function<void(Users)> &rcb,
+                  const drogon::orm::ExceptionCallback &ecb) const;
 
   private:
     friend drogon::orm::Mapper<Books>;
@@ -238,6 +256,7 @@ class Books
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
     std::shared_ptr<std::string> coverKey_;
+    std::shared_ptr<std::string> ownerId_;
 
     struct MetaData
     {
@@ -250,7 +269,7 @@ class Books
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[10]={ false };
+    bool dirtyFlag_[11]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -336,6 +355,12 @@ class Books
         if(dirtyFlag_[9])
         {
             sql += "cover_key,";
+            ++parametersCount;
+        }
+
+        if(dirtyFlag_[10])
+        {
+            sql += "owner_id,";
             ++parametersCount;
         }
 
@@ -445,6 +470,14 @@ class Books
         }
 
         if(dirtyFlag_[9])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        if(dirtyFlag_[10])
         {
 
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);

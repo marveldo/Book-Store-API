@@ -14,4 +14,12 @@ void RegisterEvents(EventBus* bus, TaskQueue* queue) {
     bus->Subscribe<UserCreated>(USER_CREATED, [queue](UserCreated event) {
         queue->enqueue("create_user_settings", {{"user_id", event.id}});
     });
+
+    bus->Subscribe<PdfUploaded>(PDF_UPLOADED, [queue](PdfUploaded event) {
+        queue->enqueue("extract_pdf", {
+            {"job_id", event.jobId},
+            {"book_id", event.bookId},
+            {"path", event.path}
+        });
+    });
 }

@@ -15,13 +15,16 @@ public:
     using Handler    = std::function<drogon::Task<>(const nlohmann::json&)>;
     using Next       = std::function<drogon::Task<>()>;
     using Middleware = std::function<drogon::Task<>(const nlohmann::json& payload, const Next& next)>;
-    TaskQueue(const std::string& host, int port, const std::string& password, int maxAttempts, int maxInFlight);
+    // Runs once when a task gives up for good (last attempt failed, or PermanentTaskError). For cleanup.
+    using OnDead     = std::function<drogon::Task<>(const nlohmann::json& payload, const std::string& error)>;
+    TaskQueue(const std::string& host, int port, const std::string& password, int maxAttempts, int maxInFlight,
+              const std::string& username = "", int db = 0);
     ~TaskQueue();
 
     TaskQueue(const TaskQueue&) = delete;
     TaskQueue& operator=(const TaskQueue&) = delete;
 
-    void registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares = {});
+    void registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares = {}, OnDead onDead = nullptr);
     void start();
     void stop();
     void enqueue(const std::string& type, const nlohmann::json& payload);
@@ -31,6 +34,7 @@ private:
     struct Entry {
         Handler handler;
         std::vector<Middleware> middlewares;
+        OnDead onDead;
     };
 
     drogon::AsyncTask poll();

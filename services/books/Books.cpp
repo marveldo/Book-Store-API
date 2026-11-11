@@ -1,6 +1,8 @@
 #include "Books.hpp"
 #include <drogon/orm/CoroMapper.h>
 #include "utils/Errors.hpp"
+#include "utils/DbTransaction.hpp"
+#include <stdexcept>
 
 using namespace drogon::orm;
 using namespace drogon_model::bookstore;
@@ -23,13 +25,14 @@ Task<Books> BookService::getBookById(const std::string& id) {
     }
 }
 
-Task<Books> BookService::createBook(const CreateBookInput& input) {
+Task<Books> BookService::createBook(const CreateBookInput& input, const std::string& ownerId) {
     CoroMapper<Books> books(dbClient_);
 
     Books book;
     book.setTitle(input.title);
     book.setAuthor(input.author);
     book.setPrice(input.price);
+    book.setOwnerId(ownerId);
     if (input.isbn)          book.setIsbn(*input.isbn);
     if (input.description)   book.setDescription(*input.description);
     if (input.publishedYear) book.setPublishedYear(static_cast<short>(*input.publishedYear));
@@ -86,4 +89,23 @@ Task<UserBooks> BookService::addBookToUser(const std::string& userId, const std:
 Task<bool> BookService::removeBookFromUser(const std::string& userId, const std::string& bookId) {
     CoroMapper<UserBooks> userBooks(dbClient_);
     co_return (co_await userBooks.deleteByPrimaryKey(std::make_tuple(userId, bookId))) > 0;
+}
+
+Task<> BookService::withTransaction(std::function<Task<>(DbClientPtr tx)> work) {
+    auto tx = co_await dbClient_->newTransactionCoro();
+    try {
+        co_await work(tx);
+    } catch (...) {
+        tx->rollback();
+        throw;
+    }
+
+    if (!co_await CommitAwaiter(std::move(tx))) throw std::runtime_error("Transaction failed to commit");
+}
+
+Task<std::optional<std::string>> BookService::getOwnerId(const std::string& id) {
+    auto result = co_await dbClient_->execSqlCoro("SELECT owner_id FROM books WHERE id = $1", id);
+    if (result.empty()) throw NotFound("Book not found");
+    if (result[0]["owner_id"].isNull()) co_return std::nullopt;
+    co_return result[0]["owner_id"].as<std::string>();
 }

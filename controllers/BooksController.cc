@@ -31,7 +31,8 @@ Task<HttpResponsePtr> BooksController::CreateBook(HttpRequestPtr req) {
         co_return res::badRequest(std::vector<FieldError>{{"cover", "no uploaded image found for this cover"}});
     }
 
-    auto book = co_await services_->bookService->createBook(input);
+    const std::string ownerId = req->attributes()->get<std::string>("id");
+    auto book = co_await services_->bookService->createBook(input, ownerId);
     co_return res::success(bookJson(book), k201Created);
 }
 

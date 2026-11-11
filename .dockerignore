@@ -1,0 +1,14 @@
+# Keep the build context small and secrets out of the image.
+.git
+.env
+build
+cmake-build-*
+uploads
+.vscode
+.idea
+*.exe
+*.dll
+*.o
+*.a
+postman
+models/model.json

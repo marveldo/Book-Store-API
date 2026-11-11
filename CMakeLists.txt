@@ -97,6 +97,19 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
 target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::SODIUM)
 
+# MuPDF reads PDFs for the extract_pdf task (AGPL, fine for a public repo).
+# MSYS2: pacman -S mingw-w64-ucrt-x86_64-libmupdf  (ships a DLL)
+# Debian/Ubuntu: apt install libmupdf-dev libmujs-dev libgumbo-dev libopenjp2-7-dev libjbig2dec0-dev libjpeg-dev libharfbuzz-dev
+#   (static library only, so its own dependencies must be linked too; harfbuzz is missing from its .pc file)
+pkg_check_modules(MUPDF REQUIRED mupdf)
+if(MINGW)
+    pkg_check_modules(MUPDF_LIB REQUIRED IMPORTED_TARGET mupdf)
+    target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::MUPDF_LIB)
+else()
+    target_include_directories(${PROJECT_NAME} PRIVATE ${MUPDF_STATIC_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MUPDF_STATIC_LDFLAGS} harfbuzz)
+endif()
+
 set(JWT_BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)   # don't build its examples
 set(JWT_DISABLE_PICOJSON ON  CACHE BOOL "" FORCE)   # we use nlohmann, not picojson
 

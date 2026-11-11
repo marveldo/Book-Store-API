@@ -1,6 +1,8 @@
 #pragma once
 #include <drogon/orm/DbClient.h>
 #include <drogon/utils/coroutine.h>
+#include <functional>
+#include <optional>
 #include "events/EventBus.hpp"
 #include "models/Books.h"
 #include "models/UserBooks.h"
@@ -17,11 +19,13 @@ class BookService {
 
        drogon::Task<drogon_model::bookstore::Books> getBookById(const std::string& id);
 
-       drogon::Task<drogon_model::bookstore::Books> createBook(const CreateBookInput& input);
+       drogon::Task<drogon_model::bookstore::Books> createBook(const CreateBookInput& input, const std::string& ownerId);
 
        drogon::Task<drogon_model::bookstore::Books> updateBook(const std::string& id, const UpdateBookInput& input);
 
        drogon::Task<bool> deleteBook(const std::string& id);
+
+       drogon::Task<std::optional<std::string>> getOwnerId(const std::string& id);
 
        // ownership (user_books)
        drogon::Task<std::vector<drogon_model::bookstore::Books>> getBooksByUser(const std::string& userId);
@@ -29,6 +33,8 @@ class BookService {
        drogon::Task<drogon_model::bookstore::UserBooks> addBookToUser(const std::string& userId, const std::string& bookId);
 
        drogon::Task<bool> removeBookFromUser(const std::string& userId, const std::string& bookId);
+
+       drogon::Task<> withTransaction(std::function<drogon::Task<>(drogon::orm::DbClientPtr tx)> work);
 
     private:
        drogon::orm::DbClientPtr dbClient_;

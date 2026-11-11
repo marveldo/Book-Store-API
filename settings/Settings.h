@@ -3,6 +3,7 @@
 #include <drogon/orm/DbClient.h>
 
 struct DatabaseSettings {
+    std::string url;            // DB_URL (e.g. on Render). When set, the fields below are ignored.
     std::string host;
     int         port;
     std::string name;
@@ -23,6 +24,8 @@ struct RedisSettings {
     std::string host;
     int         port;
     std::string password;
+    std::string username;       // Redis 6+ ACL user; empty = the "default" user
+    int         db = 0;         // database number (SELECT)
     int         maxAttempts;
     int         maxInFlight;
 };
@@ -41,6 +44,12 @@ struct CloudinarySettings {
     std::string apiSecret;
 };
 
+struct UploadSettings {
+    size_t pdfMaxBytes;
+    int    pdfMaxPages;
+    int    pdfTimeoutSeconds;
+};
+
 struct Settings {
     int              port;
     int              threads;
@@ -51,6 +60,7 @@ struct Settings {
     RedisSettings    redis;
     EmailSettings    email;
     CloudinarySettings cloudinary;
+    UploadSettings   uploads;
 
     bool isProduction() const { return environment == "production"; }
 };

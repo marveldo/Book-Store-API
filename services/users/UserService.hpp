@@ -26,6 +26,8 @@ class UserService {
 
        drogon::Task<bool> deleteUser(const std::string& id);
 
+       drogon::Task<bool> isAdmin(const std::string& id);
+
        drogon::Task<std::string> hashPassword(std::string password);
 
        drogon::Task<bool> verifyPassword(std::string password, std::string hash);

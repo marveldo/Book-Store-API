@@ -7,7 +7,7 @@
     "schema": "${DB_SCHEMA}",
     "user": "${DB_USER}",
     "password": "${DB_PASSWORD}",
-    "tables": ["users", "user_settings", "books", "user_books", "orders", "payments", "book_pages"],
+    "tables": ["users", "user_settings", "books", "user_books", "orders", "payments", "book_pages", "book_toc", "book_comments"],
     "convert": {
       "enabled": false,
       "items":[{

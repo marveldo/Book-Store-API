@@ -4,6 +4,7 @@
 #include <drogon/utils/coroutine.h>
 #include "utils/Security.hpp"
 #include "utils/Errors.hpp"
+#include "utils/Role.hpp"
 #include "events/Events.hpp"
 
 using namespace drogon::orm;
@@ -115,5 +116,12 @@ Task<bool> UserService::verifyPassword(std::string password, std::string hash) {
     co_return co_await security::verifyAsync(std::move(password), std::move(hash));
 }
 
-
-
+Task<bool> UserService::isAdmin(const std::string& id) {
+    CoroMapper<Users> users(dbClient_);
+    try {
+        auto user = co_await users.findByPrimaryKey(id);
+        co_return user.getValueOfIsActive() && roleFromString(user.getValueOfRole()) == Role::Admin;
+    } catch (const UnexpectedRows&) {
+        co_return false;
+    }
+}

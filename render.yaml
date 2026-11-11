@@ -1,0 +1,83 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo.
+# Creates the API (Docker), a Postgres database and a Key Value (Redis) instance, and wires them together.
+# Values marked `sync: false` are asked for once when you create the Blueprint.
+
+services:
+  - type: web
+    name: mbooks-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: THREADS
+        value: "2"                 # the free plan has 0.1 CPU; more threads won't help
+
+      # Database (Render's internal URL; migrations run on every start)
+      - key: DB_URL
+        fromDatabase:
+          name: mbooks-db
+          property: connectionString
+      - key: DB_CONNECTIONS
+        value: "3"
+
+      # Redis for the task queue and job progress
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mbooks-redis
+          property: connectionString
+      - key: QUEUE_MAX_ATTEMPTS
+        value: "3"
+      - key: QUEUE_MAX_IN_FLIGHT
+        value: "10"
+
+      # Auth
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRATION
+        value: 15m
+      - key: JWT_REFRESH_EXPIRATION
+        value: 7d
+
+      # Email (Resend)
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: APP_URL
+        sync: false                # your frontend's URL, used in emails
+      - key: ASSETS_URL
+        sync: false
+
+      # Cloudinary (book covers)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # PDF uploads
+      - key: PDF_MAX_MB
+        value: "20"
+      - key: PDF_MAX_PAGES
+        value: "2000"
+      - key: PDF_TIMEOUT_SECONDS
+        value: "600"
+
+  - type: keyvalue
+    name: mbooks-redis
+    plan: free
+    maxmemoryPolicy: noeviction    # never silently drop queued tasks when memory is full
+    ipAllowList: []                # only reachable from your Render services
+
+databases:
+  - name: mbooks-db
+    plan: free
+    databaseName: bookstore
+    user: mbooks

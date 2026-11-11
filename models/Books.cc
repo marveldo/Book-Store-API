@@ -8,6 +8,8 @@
 
 #include "Books.h"
 
+#include "Users.h"
+
 #include <drogon/utils/Utilities.h>
 
 #include <string>
@@ -39,6 +41,8 @@ const std::string Books::Cols::_updated_at = "\"updated_at\"";
 
 const std::string Books::Cols::_cover_key = "\"cover_key\"";
 
+const std::string Books::Cols::_owner_id = "\"owner_id\"";
+
 
 const std::string Books::primaryKeyName = "id";
 
@@ -57,7 +61,8 @@ const std::vector<typename Books::MetaData> Books::metaData_={
 {"price","int64_t","bigint",8,0,0,1},
 {"created_at","::trantor::Date","timestamp with time zone",0,0,0,1},
 {"updated_at","::trantor::Date","timestamp with time zone",0,0,0,1},
-{"cover_key","std::string","text",0,0,0,0}
+{"cover_key","std::string","text",0,0,0,0},
+{"owner_id","std::string","uuid",0,0,0,0}
 
 };
 const std::string &Books::getColumnName(size_t index) noexcept(false)
@@ -174,11 +179,18 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
 
         }
 
+        if(!r["owner_id"].isNull())
+        {
+
+            ownerId_=std::make_shared<std::string>(r["owner_id"].as<std::string>());
+
+        }
+
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 10 > r.size())
+        if(offset + 11 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -299,13 +311,21 @@ Books::Books(const Row &r, const ssize_t indexOffset) noexcept
 
         }
 
+        index = offset + 10;
+        if(!r[index].isNull())
+        {
+
+            ownerId_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
     }
 
 }
 
 Books::Books(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -436,6 +456,15 @@ Books::Books(const Json::Value &pJson, const std::vector<std::string> &pMasquera
         if(!pJson[pMasqueradingVector[9]].isNull())
         {
             coverKey_=std::make_shared<std::string>(pJson[pMasqueradingVector[9]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
+        {
+            ownerId_=std::make_shared<std::string>(pJson[pMasqueradingVector[10]].asString());
         }
     }
 
@@ -572,12 +601,21 @@ Books::Books(const Json::Value &pJson) noexcept(false)
         }
     }
 
+    if(pJson.isMember("owner_id"))
+    {
+        dirtyFlag_[10]=true;
+        if(!pJson["owner_id"].isNull())
+        {
+            ownerId_=std::make_shared<std::string>(pJson["owner_id"].asString());
+        }
+    }
+
 }
 
 void Books::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -710,6 +748,15 @@ void Books::updateByMasqueradedJson(const Json::Value &pJson,
         }
     }
 
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
+        {
+            ownerId_=std::make_shared<std::string>(pJson[pMasqueradingVector[10]].asString());
+        }
+    }
+
 }
 
 void Books::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -839,6 +886,15 @@ void Books::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["cover_key"].isNull())
         {
             coverKey_=std::make_shared<std::string>(pJson["cover_key"].asString());
+        }
+    }
+
+    if(pJson.isMember("owner_id"))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson["owner_id"].isNull())
+        {
+            ownerId_=std::make_shared<std::string>(pJson["owner_id"].asString());
         }
     }
 
@@ -1069,6 +1125,33 @@ void Books::setCoverKeyToNull() noexcept
     dirtyFlag_[9] = true;
 }
 
+const std::string &Books::getValueOfOwnerId() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(ownerId_)
+        return *ownerId_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Books::getOwnerId() const noexcept
+{
+    return ownerId_;
+}
+void Books::setOwnerId(const std::string &pOwnerId) noexcept
+{
+    ownerId_ = std::make_shared<std::string>(pOwnerId);
+    dirtyFlag_[10] = true;
+}
+void Books::setOwnerId(std::string &&pOwnerId) noexcept
+{
+    ownerId_ = std::make_shared<std::string>(std::move(pOwnerId));
+    dirtyFlag_[10] = true;
+}
+void Books::setOwnerIdToNull() noexcept
+{
+    ownerId_.reset();
+    dirtyFlag_[10] = true;
+}
+
 void Books::updateId(const uint64_t id)
 {
 }
@@ -1086,7 +1169,8 @@ const std::vector<std::string> &Books::insertColumns() noexcept
         "price",
         "created_at",
         "updated_at",
-        "cover_key"
+        "cover_key",
+        "owner_id"
 
     };
     return inCols;
@@ -1215,6 +1299,18 @@ void Books::outputArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[10])
+    {
+        if(getOwnerId())
+        {
+            binder << getValueOfOwnerId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 
 const std::vector<std::string> Books::updateColumns() const
@@ -1269,6 +1365,11 @@ const std::vector<std::string> Books::updateColumns() const
     if(dirtyFlag_[9])
     {
         ret.push_back(getColumnName(9));
+    }
+
+    if(dirtyFlag_[10])
+    {
+        ret.push_back(getColumnName(10));
     }
 
     return ret;
@@ -1397,6 +1498,18 @@ void Books::updateArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[10])
+    {
+        if(getOwnerId())
+        {
+            binder << getValueOfOwnerId();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 Json::Value Books::toJson() const
 {
@@ -1512,6 +1625,17 @@ Json::Value Books::toJson() const
         ret["cover_key"]=Json::Value();
     }
 
+    if(getOwnerId())
+    {
+
+        ret["owner_id"]=getValueOfOwnerId();
+
+    }
+    else
+    {
+        ret["owner_id"]=Json::Value();
+    }
+
     return ret;
 }
 
@@ -1524,7 +1648,7 @@ Json::Value Books::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 10)
+    if(pMasqueradingVector.size() == 11)
     {
 
         if(!pMasqueradingVector[0].empty())
@@ -1667,6 +1791,20 @@ Json::Value Books::toMasqueradedJson(
             }
         }
 
+        if(!pMasqueradingVector[10].empty())
+        {
+            if(getOwnerId())
+            {
+
+                ret[pMasqueradingVector[10]]=getValueOfOwnerId();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[10]]=Json::Value();
+            }
+        }
+
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -1781,6 +1919,17 @@ Json::Value Books::toMasqueradedJson(
         ret["cover_key"]=Json::Value();
     }
 
+    if(getOwnerId())
+    {
+
+        ret["owner_id"]=getValueOfOwnerId();
+
+    }
+    else
+    {
+        ret["owner_id"]=Json::Value();
+    }
+
     return ret;
 }
 
@@ -1859,13 +2008,19 @@ bool Books::validateJsonForCreation(const Json::Value &pJson, std::string &err)
             return false;
     }
 
+    if(pJson.isMember("owner_id"))
+    {
+        if(!validJsonOfField(10, "owner_id", pJson["owner_id"], err, true))
+            return false;
+    }
+
     return true;
 }
 bool Books::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                const std::vector<std::string> &pMasqueradingVector,
                                                std::string &err)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1984,6 +2139,16 @@ bool Books::validateMasqueradedJsonForCreation(const Json::Value &pJson,
 
       }
 
+      if(!pMasqueradingVector[10].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[10]))
+          {
+              if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, true))
+                  return false;
+          }
+
+      }
+
     }
     catch(const Json::LogicError &e)
     {
@@ -2061,13 +2226,19 @@ bool Books::validateJsonForUpdate(const Json::Value &pJson, std::string &err)
             return false;
     }
 
+    if(pJson.isMember("owner_id"))
+    {
+        if(!validJsonOfField(10, "owner_id", pJson["owner_id"], err, false))
+            return false;
+    }
+
     return true;
 }
 bool Books::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                              const std::vector<std::string> &pMasqueradingVector,
                                              std::string &err)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2137,6 +2308,12 @@ bool Books::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
       {
           if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+      {
+          if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, false))
               return false;
       }
 
@@ -2337,10 +2514,69 @@ bool Books::validJsonOfField(size_t index,
 
             break;
 
+        case 10:
+
+            if(pJson.isNull())
+            {
+                return true;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
         default:
             err="Internal error in the server";
             return false;
     }
     return true;
+}
+
+Users Books::getUsers(const DbClientPtr &clientPtr) const {
+    static const std::string sql = "select * from users where id = $1";
+    Result r(nullptr);
+    {
+        auto binder = *clientPtr << sql;
+        binder << *ownerId_ << Mode::Blocking >>
+            [&r](const Result &result) { r = result; };
+        binder.exec();
+    }
+    if (r.size() == 0)
+    {
+        throw UnexpectedRows("0 rows found");
+    }
+    else if (r.size() > 1)
+    {
+        throw UnexpectedRows("Found more than one row");
+    }
+    return Users(r[0]);
+}
+
+void Books::getUsers(const DbClientPtr &clientPtr,
+                     const std::function<void(Users)> &rcb,
+                     const ExceptionCallback &ecb) const
+{
+    static const std::string sql = "select * from users where id = $1";
+    *clientPtr << sql
+               << *ownerId_
+               >> [rcb = std::move(rcb), ecb](const Result &r){
+                    if (r.size() == 0)
+                    {
+                        ecb(UnexpectedRows("0 rows found"));
+                    }
+                    else if (r.size() > 1)
+                    {
+                        ecb(UnexpectedRows("Found more than one row"));
+                    }
+                    else
+                    {
+                        rcb(Users(r[0]));
+                    }
+               }
+               >> ecb;
 }
 
