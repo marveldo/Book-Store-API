@@ -27,6 +27,10 @@ struct LoginUserInput {
     std::string password;
 };
 
+struct RefreshTokenInput {
+    std::string refreshToken;
+};
+
 struct UpdateUserInput {
     std::optional<std::string> username;   // nullopt = leave unchanged
     std::optional<std::string> email;
@@ -91,6 +95,14 @@ inline ParseResult<ChangePasswordInput> parseChangePassword(std::string_view raw
         checkPasswordStrength(v, next, "new_password");
         if (current && next && *current == *next) v.addError("new_password", "must be different from the current password");
         return ChangePasswordInput{current.value_or(""), next.value_or("")};
+    });
+}
+
+inline ParseResult<RefreshTokenInput> parseRefreshToken(std::string_view raw) {
+    return parseInput<RefreshTokenInput>(raw, [](Validator& v) {
+        v.onlyAllow({"refresh_token"});
+        auto token = v.requiredString("refresh_token", 1, 4096);
+        return RefreshTokenInput{token.value_or("")};
     });
 }
 

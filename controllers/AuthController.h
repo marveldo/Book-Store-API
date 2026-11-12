@@ -16,10 +16,16 @@ class AuthController : public drogon::HttpController<AuthController, false>
 
     METHOD_LIST_BEGIN
     ADD_METHOD_TO(AuthController::Login, API_V1 + "/auth/login", Post);
+    ADD_METHOD_TO(AuthController::Refresh, API_V1 + "/auth/refresh", Post);
     METHOD_LIST_END
 
     Task<HttpResponsePtr> Login(HttpRequestPtr req);
+    // A new access token (and a new refresh token) from a refresh token, without the password.
+    Task<HttpResponsePtr> Refresh(HttpRequestPtr req);
 
   private:
+    // The login/refresh response: both tokens plus the user.
+    Json::Value tokensFor(const drogon_model::bookstore::Users& user);
+
     Services* services_;
 };
