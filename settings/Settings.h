@@ -50,6 +50,7 @@ struct UploadSettings {
     int    pdfMaxPages;
     int    pdfTimeoutSeconds;
     int    pdfMaxImages;
+    int    pdfMaxConcurrent;   // PDF imports running at once on each server
 };
 
 struct Settings {

@@ -151,5 +151,6 @@ void registerTaskHandlers(TaskQueue* queue, EmailService* email, Services* servi
         co_await services->jobService->setStatus(payload.value("job_id", ""), "failed", error);
         co_await services->jobService->publish(payload.value("job_id", ""));
         co_await services->jobService->unlockBook(payload.value("book_id", ""), payload.value("job_id", ""));
-    });
+    },
+    "pdf");   // its own lane: see Bootstrap
 }

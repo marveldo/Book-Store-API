@@ -57,6 +57,8 @@ AppContext* bootstrap() {
         const RedisSettings& redis = ctx->settings->redis;
         ctx->queue = new TaskQueue(redis.host, redis.port, redis.password, redis.maxAttempts, redis.maxInFlight,
                                    redis.username, redis.db);
+        // PDF imports get their own lane (Redis list "tasks:pdf") so they never hold up emails.
+        ctx->queue->addLane("pdf", ctx->settings->uploads.pdfMaxConcurrent);
 
         const EmailSettings& email = ctx->settings->email;
         ctx->email = new EmailService(email.resendApiKey, email.from, email.templatesDir, email.appUrl, email.assetsUrl, ctx->queue->loop(), redis.maxInFlight);

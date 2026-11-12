@@ -91,6 +91,7 @@ Settings* getSettings() {
     s->uploads.pdfMaxPages  = toInt("PDF_MAX_PAGES", "2000");
     s->uploads.pdfTimeoutSeconds = toInt("PDF_TIMEOUT_SECONDS", "600");
     s->uploads.pdfMaxImages = toInt("PDF_MAX_IMAGES", "300");
+    s->uploads.pdfMaxConcurrent = toInt("PDF_MAX_CONCURRENT", "1");
 
     if (s->port < 1 || s->port > 65535) throw std::runtime_error("PORT out of range");
 

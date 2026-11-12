@@ -1,17 +1,23 @@
 #include "TaskQueue.hpp"
 #include "TaskErrors.hpp"
 #include <trantor/utils/Logger.h>
+#include <algorithm>
 #include <optional>
+#include <stdexcept>
 
 using drogon::nosql::RedisClient;
 using drogon::nosql::RedisResult;
 
 TaskQueue::TaskQueue(const std::string& host, int port, const std::string& password, int maxAttempts, int maxInFlight,
                      const std::string& username, int db)
-    : loopThread_("TaskQueue"), maxAttempts_(maxAttempts), maxInFlight_(maxInFlight) {
-    const trantor::InetAddress address(host, static_cast<uint16_t>(port));
-    producer_ = RedisClient::newRedisClient(address, 2, password, static_cast<unsigned int>(db), username);
-    consumer_ = RedisClient::newRedisClient(address, 1, password, static_cast<unsigned int>(db), username);
+    : loopThread_("TaskQueue"),
+      address_(host, static_cast<uint16_t>(port)),
+      password_(password),
+      username_(username),
+      db_(db),
+      maxAttempts_(maxAttempts) {
+    producer_ = RedisClient::newRedisClient(address_, 2, password_, static_cast<unsigned int>(db_), username_);
+    addLane("", maxInFlight);
     loopThread_.run();
 }
 
@@ -23,13 +29,32 @@ trantor::EventLoop* TaskQueue::loop() {
     return loopThread_.getLoop();
 }
 
-void TaskQueue::registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares, OnDead onDead) {
-    handlers_[type] = Entry{std::move(handler), std::move(middlewares), std::move(onDead)};
+void TaskQueue::addLane(const std::string& name, int maxInFlight) {
+    if (started_) throw std::logic_error("TaskQueue: add lanes before start()");
+    Lane lane;
+    lane.list        = name.empty() ? QUEUE : std::string(QUEUE) + ":" + name;
+    lane.maxInFlight = std::max(1, maxInFlight);
+    lane.consumer    = RedisClient::newRedisClient(address_, 1, password_, static_cast<unsigned int>(db_), username_);
+    lanes_[name] = std::move(lane);
+}
+
+void TaskQueue::registerHandler(const std::string& type, Handler handler, std::vector<Middleware> middlewares,
+                                OnDead onDead, const std::string& lane) {
+    if (!lanes_.count(lane)) throw std::logic_error("TaskQueue: no lane called '" + lane + "' (call addLane first)");
+    handlers_[type] = Entry{std::move(handler), std::move(middlewares), std::move(onDead), lane};
+}
+
+TaskQueue::Lane& TaskQueue::laneFor(const std::string& type) {
+    auto it = handlers_.find(type);
+    return lanes_.at(it == handlers_.end() ? "" : it->second.lane);   // unknown types go to the default lane, then to dead
 }
 
 void TaskQueue::start() {
     started_ = true;
-    loop()->queueInLoop([this]() { poll(); });
+    pollers_ = static_cast<int>(lanes_.size());
+    loop()->queueInLoop([this]() {
+        for (auto& [name, lane] : lanes_) poll(&lane);
+    });
 }
 
 void TaskQueue::stop() {
@@ -39,15 +64,18 @@ void TaskQueue::stop() {
 
 void TaskQueue::enqueue(const std::string& type, const nlohmann::json& payload) {
     const std::string task = nlohmann::json{{"type", type}, {"payload", payload}, {"attempts", 0}}.dump();
+    const std::string list = laneFor(type).list;
     producer_->execCommandAsync(
         [](const RedisResult&) {},
         [type](const std::exception& e) { LOG_ERROR << "TaskQueue: failed to enqueue " << type << ": " << e.what(); },
-        "LPUSH %s %s", QUEUE, task.c_str());
+        "LPUSH %s %s", list.c_str(), task.c_str());
 }
 
-drogon::AsyncTask TaskQueue::poll() {
+// One of these per lane. It only takes a task from Redis when the lane has room, so tasks
+// that can't run yet wait in Redis rather than in this server's memory.
+drogon::AsyncTask TaskQueue::poll(Lane* lane) {
     while (!stopping_) {
-        if (inFlight_ >= maxInFlight_) {
+        if (lane->inFlight >= lane->maxInFlight) {
             co_await drogon::sleepCoro(loop(), 0.05);
             continue;
         }
@@ -55,28 +83,28 @@ drogon::AsyncTask TaskQueue::poll() {
         std::optional<std::string> raw;
         bool failed = false;
         try {
-            auto result = co_await consumer_->execCommandCoro("BRPOP %s %d", QUEUE, 2);
+            auto result = co_await lane->consumer->execCommandCoro("BRPOP %s %d", lane->list.c_str(), 2);
             if (!result.isNil()) raw = result.asArray()[1].asString();
         } catch (const std::exception& e) {
-            LOG_ERROR << "TaskQueue: " << e.what();
+            LOG_ERROR << "TaskQueue (" << lane->list << "): " << e.what();
             failed = true;
         }
 
         co_await drogon::switchThreadCoro(loop());
         if (failed) co_await drogon::sleepCoro(loop(), 1.0);
         if (raw) {
-            ++inFlight_;
-            execute(std::move(*raw));
+            ++lane->inFlight;
+            execute(lane, std::move(*raw));
         }
     }
 
-    while (inFlight_ > 0) co_await drogon::sleepCoro(loop(), 0.05);
-    stopped_.set_value();
+    while (lane->inFlight > 0) co_await drogon::sleepCoro(loop(), 0.05);
+    if (--pollers_ == 0) stopped_.set_value();   // the last lane to finish lets stop() return
 }
 
-drogon::AsyncTask TaskQueue::execute(std::string raw) {
+drogon::AsyncTask TaskQueue::execute(Lane* lane, std::string raw) {
     try {
-        const char* list = nullptr;
+        std::string list;
         std::string value;
 
         auto task = nlohmann::json::parse(raw, nullptr, false);
@@ -111,7 +139,8 @@ drogon::AsyncTask TaskQueue::execute(std::string raw) {
                     const int attempts = task.value("attempts", 0) + 1;
                     task["attempts"]   = attempts;
                     task["last_error"] = error;
-                    list  = (!permanent && attempts < maxAttempts_) ? QUEUE : DEAD;
+                    // A retry goes to the back of its own lane.
+                    list  = (!permanent && attempts < maxAttempts_) ? lane->list : DEAD;
                     value = task.dump();
 
                     if (list == DEAD) {
@@ -129,13 +158,13 @@ drogon::AsyncTask TaskQueue::execute(std::string raw) {
             }
         }
 
-        if (list) co_await push(list, std::move(value));
+        if (!list.empty()) co_await push(std::move(list), std::move(value));
     } catch (const std::exception& e) {
         LOG_ERROR << "TaskQueue: " << e.what();
     }
 
     co_await drogon::switchThreadCoro(loop());
-    --inFlight_;
+    --lane->inFlight;
 }
 
 drogon::Task<> TaskQueue::run(const Entry& entry, const nlohmann::json& payload, size_t index) {
@@ -146,6 +175,6 @@ drogon::Task<> TaskQueue::run(const Entry& entry, const nlohmann::json& payload,
     co_await entry.middlewares[index](payload, [&]() { return run(entry, payload, index + 1); });
 }
 
-drogon::Task<> TaskQueue::push(const char* list, std::string value) {
-    co_await producer_->execCommandCoro("LPUSH %s %s", list, value.c_str());
+drogon::Task<> TaskQueue::push(std::string list, std::string value) {
+    co_await producer_->execCommandCoro("LPUSH %s %s", list.c_str(), value.c_str());
 }
