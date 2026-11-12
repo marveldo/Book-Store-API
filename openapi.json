@@ -1220,6 +1220,66 @@
         }
       }
     },
+    "/api/v1/books/{bookId}/images/signature": {
+      "parameters": [
+        {
+          "name": "bookId",
+          "in": "path",
+          "required": true,
+          "description": "Book id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Pages"
+        ],
+        "summary": "Get a signed upload for an image in the page builder",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PageImageSignature"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "description": "Book owner or admin. For adding a picture to a page by hand, or replacing a figure the PDF import got wrong.\n\n1. Call this. 2. POST the image (`file`) plus every entry of `fields` as multipart/form-data to `upload_url` (straight to Cloudinary; JPG, PNG or WebP, resized to fit 1600×1600). 3. Insert `{\"type\":\"image\",\"attrs\":{\"src\": url}}` into the page and save it as usual.\n\nImages live in the book's folder on Cloudinary, so a later PDF import (which replaces every page) removes them too.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/books/{bookId}/toc": {
       "parameters": [
         {
@@ -2549,6 +2609,41 @@
               "allowed_formats": "jpg,jpeg,png,webp",
               "transformation": "c_limit,w_1200,h_1800"
             }
+          }
+        }
+      },
+      "PageImageSignature": {
+        "type": "object",
+        "properties": {
+          "upload_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://api.cloudinary.com/v1_1/<cloud>/image/upload"
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Send all of these as form fields together with `file` to upload_url. Valid for 1 hour, for this one image.",
+            "example": {
+              "api_key": "…",
+              "timestamp": "1762860000",
+              "public_id": "books/<book>/manual/<uuid>",
+              "signature": "…",
+              "allowed_formats": "jpg,jpeg,png,webp",
+              "transformation": "c_limit,w_1600,h_1600"
+            }
+          },
+          "public_id": {
+            "type": "string",
+            "example": "books/<book>/manual/<uuid>"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Use as the image node's `src` once the upload succeeds",
+            "example": "https://res.cloudinary.com/<cloud>/image/upload/f_auto,q_auto/books/<book>/manual/<uuid>"
           }
         }
       },

@@ -130,12 +130,12 @@ std::string CloudinaryService::sign(Params params, const std::string& secret) {
     return hex;
 }
 
-UploadSignature CloudinaryService::signUpload(const std::string& publicId) const {
+UploadSignature CloudinaryService::signUpload(const std::string& publicId, const std::string& transformation) const {
     Params params = {
         {"allowed_formats", ALLOWED_FORMATS},
         {"public_id", publicId},
         {"timestamp", nowSeconds()},
-        {"transformation", INCOMING},
+        {"transformation", transformation},
     };
 
     UploadSignature result;

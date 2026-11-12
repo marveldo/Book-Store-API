@@ -7,6 +7,7 @@
 #include <cmath>
 #include <exception>
 #include <map>
+#include <optional>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -574,22 +575,70 @@ std::string toTipTap(const RawPage& page, double bodySize, const PdfImageOptions
 // ("e:d e:"). So: draw the page small, rub out the text, and whatever ink is left is a drawing.
 // ---------------------------------------------------------------------------
 
+// Words of 3+ letters in the text that sits inside `r`. Figure labels are digits, single
+// letters and fragments ("1 2 3", "d e:"); code listings and notes are full of real words.
+int wordsInside(const fz_rect& r, const std::vector<Block>& blocks) {
+    const fz_rect grown{r.x0 - 6, r.y0 - 6, r.x1 + 6, r.y1 + 6};
+    int words = 0;
+    for (const auto& block : blocks) {
+        if (block.isImage || area(block.rect) <= 0) continue;
+        if (area(fz_intersect_rect(block.rect, grown)) < area(block.rect) * 0.5f) continue;
+        int letters = 0;
+        for (char c : block.text() + " ") {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) { letters++; continue; }
+            if (letters >= 3) words++;
+            letters = 0;
+        }
+    }
+    return words;
+}
+
+// Thin lines vanish when a page is drawn this small: at a quarter size a 0.25 pt line is a
+// faint grey smudge. For this one drawing, turn off anti-aliasing and make every line at least
+// a pixel wide, so any line shows up as solid ink. The settings go back afterwards, because the
+// figures themselves are drawn with them.
+struct DetectionDrawing {
+    fz_context* ctx;
+    int         aa;
+    float       minLine;
+    explicit DetectionDrawing(fz_context* c)
+        : ctx(c), aa(fz_graphics_aa_level(c)), minLine(fz_graphics_min_line_width(c)) {
+        fz_set_graphics_aa_level(ctx, 0);
+        fz_set_graphics_min_line_width(ctx, 1.0f);
+    }
+    ~DetectionDrawing() {
+        fz_set_graphics_aa_level(ctx, aa);
+        fz_set_graphics_min_line_width(ctx, minLine);
+    }
+};
+
 std::vector<fz_rect> findFigures(fz_context* ctx, fz_page* page, const fz_rect& bounds, const std::vector<Block>& blocks) {
     constexpr float ZOOM   = 0.35f;   // about 25 dpi: enough to see a drawing, cheap to render
     constexpr int   CELL   = 4;       // pixels per grid cell, about 11 pt
-    constexpr int   DARK   = 160;     // ink; light grey shading behind code listings is lighter than this
+    constexpr int   DARK   = 160;     // lines and solid shapes
+    constexpr int   LIGHT  = 235;     // also light grey fills: tiles, boxes, code listing shading
     constexpr int   REACH  = 2;       // cells: parts of one drawing closer than ~23 pt belong together
 
-    Pixmap gray{ctx, renderArea(ctx, page, bounds, ZOOM, true)};
-    const int w = fz_pixmap_width(ctx, gray.pix), h = fz_pixmap_height(ctx, gray.pix);
-    const int ox = fz_pixmap_x(ctx, gray.pix), oy = fz_pixmap_y(ctx, gray.pix);
-    const int stride = static_cast<int>(fz_pixmap_stride(ctx, gray.pix));
-    const unsigned char* pixels = fz_pixmap_samples(ctx, gray.pix);
+    fz_pixmap* raw = nullptr;
+    {
+        DetectionDrawing settings(ctx);   // restored at the end of this block, even if drawing fails
+        raw = renderArea(ctx, page, bounds, ZOOM, true);
+    }
+    Pixmap drawn{ctx, raw};               // freed when findFigures returns
+    fz_pixmap* gray = drawn.pix;
+    const int w = fz_pixmap_width(ctx, gray), h = fz_pixmap_height(ctx, gray);
+    const int ox = fz_pixmap_x(ctx, gray), oy = fz_pixmap_y(ctx, gray);
+    const int stride = static_cast<int>(fz_pixmap_stride(ctx, gray));
+    const unsigned char* pixels = fz_pixmap_samples(ctx, gray);
     if (w <= 0 || h <= 0) return {};
 
+    // 2 = dark ink, 1 = light grey, 0 = paper
     std::vector<unsigned char> ink(static_cast<size_t>(w) * h, 0);
     for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++) ink[y * w + x] = pixels[y * stride + x] < DARK;
+        for (int x = 0; x < w; x++) {
+            const unsigned char v = pixels[y * stride + x];
+            ink[y * w + x] = v < DARK ? 2 : v < LIGHT ? 1 : 0;
+        }
 
     // Rub out the text, letter by letter (a block's outline can stretch across a drawing whose
     // labels belong to it), and the pictures that are handled already.
@@ -606,22 +655,30 @@ std::vector<fz_rect> findFigures(fz_context* ctx, fz_page* page, const fz_rect& 
         for (const auto& glyph : block.glyphs) erase(glyph);
     }
 
-    // Coarse grid: a cell is inked if it has a couple of dark pixels left.
+    // Coarse grid. A cell is dark with a couple of dark pixels in it, light when it's mostly
+    // filled with grey (a fill, not a stray anti-aliased edge).
     const int gw = (w + CELL - 1) / CELL, gh = (h + CELL - 1) / CELL;
-    std::vector<unsigned char> cell(static_cast<size_t>(gw) * gh, 0);
+    std::vector<int> darkCount(static_cast<size_t>(gw) * gh, 0), lightCount(darkCount.size(), 0);
     for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
-            if (ink[y * w + x] && cell[(y / CELL) * gw + x / CELL] < 255) cell[(y / CELL) * gw + x / CELL]++;
-    for (auto& c : cell) c = c >= 2;
+        for (int x = 0; x < w; x++) {
+            const int c = (y / CELL) * gw + x / CELL;
+            if (ink[y * w + x] == 2) darkCount[c]++;
+            else if (ink[y * w + x] == 1) lightCount[c]++;
+        }
+    std::vector<unsigned char> dark(darkCount.size()), light(darkCount.size());
+    for (size_t c = 0; c < darkCount.size(); c++) {
+        dark[c]  = darkCount[c] >= 2;
+        light[c] = lightCount[c] >= CELL * CELL / 2;
+    }
 
     // Group nearby inked cells into drawings (flood fill, allowing REACH cells of gap).
-    std::vector<int> group(cell.size(), -1);
+    std::vector<int> group(dark.size(), -1);
     std::vector<fz_rect> figures;
     const float pageArea = area(bounds);
-    for (int start = 0; start < static_cast<int>(cell.size()); start++) {
-        if (!cell[start] || group[start] != -1) continue;
+    for (int start = 0; start < static_cast<int>(dark.size()); start++) {
+        if ((!dark[start] && !light[start]) || group[start] != -1) continue;
         const int id = start;
-        int minX = gw, minY = gh, maxX = -1, maxY = -1, cells = 0;
+        int minX = gw, minY = gh, maxX = -1, maxY = -1, cells = 0, darkCells = 0;
         std::vector<int> stack{start};
         group[start] = id;
         while (!stack.empty()) {
@@ -630,12 +687,13 @@ std::vector<fz_rect> findFigures(fz_context* ctx, fz_page* page, const fz_rect& 
             minX = std::min(minX, cx); maxX = std::max(maxX, cx);
             minY = std::min(minY, cy); maxY = std::max(maxY, cy);
             cells++;
+            if (dark[c]) darkCells++;
             for (int dy = -REACH; dy <= REACH; dy++)
                 for (int dx = -REACH; dx <= REACH; dx++) {
                     const int nx = cx + dx, ny = cy + dy;
                     if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
                     const int n = ny * gw + nx;
-                    if (cell[n] && group[n] == -1) { group[n] = id; stack.push_back(n); }
+                    if ((dark[n] || light[n]) && group[n] == -1) { group[n] = id; stack.push_back(n); }
                 }
         }
 
@@ -644,13 +702,19 @@ std::vector<fz_rect> findFigures(fz_context* ctx, fz_page* page, const fz_rect& 
         // Rules under headings and lines between paragraphs are thin; real figures aren't.
         if (r.x1 - r.x0 < 60 || r.y1 - r.y0 < 30 || area(r) < pageArea * 0.02f || cells < 6) continue;
 
-        // A frame around a sidebar or a note has ink only along its edges: that's text in a box,
-        // not a figure, so the text inside stays text.
-        int inside = 0;
-        for (int cy = minY + 1; cy < maxY; cy++)
-            for (int cx = minX + 1; cx < maxX; cx++)
-                if (cell[cy * gw + cx]) inside++;
-        if (inside < 3) continue;
+        if (darkCells >= 6) {
+            // Lines and shapes. A frame around a sidebar or a note has dark ink only along its
+            // edges: that's text in a box, not a figure, so the text inside stays text.
+            int inside = 0;
+            for (int cy = minY + 1; cy < maxY; cy++)
+                for (int cx = minX + 1; cx < maxX; cx++)
+                    if (dark[cy * gw + cx] && group[cy * gw + cx] == id) inside++;
+            if (inside < 3) continue;
+        } else {
+            // Only light grey: grey tiles or boxes in a diagram, or the shading behind a code
+            // listing or a note. A diagram's text is labels; a listing's is words.
+            if (wordsInside(r, blocks) > 3) continue;
+        }
 
         figures.push_back(r);
     }

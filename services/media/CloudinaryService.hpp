@@ -25,8 +25,9 @@ public:
     CloudinaryService(std::string cloudName, std::string apiKey, std::string apiSecret,
                       std::string apiUrl = "https://api.cloudinary.com");
 
-    // Browser uploads (book covers): the frontend sends the file straight to Cloudinary.
-    UploadSignature signUpload(const std::string& publicId) const;
+    // Browser uploads (book covers, images in the page builder): the frontend sends the file
+    // straight to Cloudinary. `transformation` is applied as it's stored (it caps the size).
+    UploadSignature signUpload(const std::string& publicId, const std::string& transformation = COVER_SIZE) const;
     drogon::Task<bool> exists(std::string publicId);
 
     // Server uploads, stored as WebP. Runs up to `parallel` uploads at once; throws if any fails
@@ -50,6 +51,9 @@ private:
     std::atomic<size_t> nextClient_{0};
 
     static constexpr const char* ALLOWED_FORMATS = "jpg,jpeg,png,webp";
-    static constexpr const char* INCOMING = "c_limit,w_1200,h_1800";
+public:
+    static constexpr const char* COVER_SIZE      = "c_limit,w_1200,h_1800";
+    static constexpr const char* PAGE_IMAGE_SIZE = "c_limit,w_1600,h_1600";
+private:
     static constexpr size_t API_CONNECTIONS = 4;
 };

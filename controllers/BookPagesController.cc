@@ -2,6 +2,7 @@
 #include "input/BookPageInputs.hpp"
 #include "input/QueryInputs.hpp"
 #include "settings/Settings.h"
+#include "utils/Media.hpp"
 #include <drogon/MultiPart.h>
 
 Task<HttpResponsePtr> BookPagesController::ListPages(HttpRequestPtr req, std::string bookId) {
@@ -97,4 +98,22 @@ Task<HttpResponsePtr> BookPagesController::UploadPdf(HttpRequestPtr req, std::st
     data["status"]     = "queued";
     data["ws_url"]     = API_V1 + "/jobs/ws?job_id=" + jobId;   // the client adds &token=<access token>
     co_return res::success(data, k202Accepted);
+}
+
+// The builder uploads the picture straight to Cloudinary (it never passes through this server),
+// then puts `url` in an image node: {"type":"image","attrs":{"src": url}}.
+Task<HttpResponsePtr> BookPagesController::ImageSignature(HttpRequestPtr req, std::string bookId) {
+    co_await services_->bookService->getBookById(bookId);   // 404 for a book that doesn't exist
+
+    // Inside the book's folder, so the images are cleaned up with the book's other images
+    // (a PDF re-import replaces every page, and with them the images they used).
+    const std::string publicId = "books/" + bookId + "/manual/" + drogon::utils::getUuid();
+    UploadSignature signature = services_->cloudinaryService->signUpload(publicId, CloudinaryService::PAGE_IMAGE_SIZE);
+
+    Json::Value data;
+    data["upload_url"] = signature.uploadUrl;
+    for (const auto& [key, value] : signature.fields) data["fields"][key] = value;
+    data["public_id"] = publicId;
+    data["url"]       = imageUrl(publicId);   // what goes in the page once the upload succeeds
+    co_return res::success(data);
 }
