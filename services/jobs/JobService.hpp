@@ -6,6 +6,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 struct JobStatus {
     std::string jobId;
@@ -15,6 +16,7 @@ struct JobStatus {
     std::string error;
     int pagesDone  = 0;
     int pagesTotal = 0;
+    std::vector<std::string> warnings;   // set when completed: what was left out
 
     bool finished() const { return status == "completed" || status == "failed"; }
 
@@ -46,7 +48,7 @@ public:
     // Storing: these only write the job:<id> hash. Nobody is told until you call publish.
     drogon::Task<> create(const std::string& jobId, const std::string& bookId, const std::string& userId);
     drogon::Task<> setStatus(const std::string& jobId, const std::string& status, const std::string& error = "");
-    drogon::Task<> complete(const std::string& jobId, int pages);
+    drogon::Task<> complete(const std::string& jobId, int pages, const std::vector<std::string>& warnings = {});
     void setProgress(const std::string& jobId, int done, int total);   // fire and forget, any thread
 
     drogon::Task<std::optional<JobStatus>> get(const std::string& jobId);

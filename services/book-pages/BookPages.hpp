@@ -30,6 +30,9 @@ class BookPageService {
        // Deletes every page of the book, then inserts `pages`. Used when a PDF replaces the book's content.
        drogon::Task<size_t> replacePages(const std::string& bookId, const std::vector<PageContent>& pages, drogon::orm::DbClientPtr tx = nullptr);
 
+       // Job ids of earlier PDF imports whose images ("books/<book>/<job>/...") the pages still use.
+       drogon::Task<std::vector<std::string>> imageFolders(const std::string& bookId, drogon::orm::DbClientPtr tx = nullptr);
+
        drogon::Task<drogon_model::bookstore::BookPages> updatePage(const std::string& bookId, int32_t pageNumber, const UpdatePageInput& input, drogon::orm::DbClientPtr tx = nullptr);
 
        drogon::Task<bool> deletePage(const std::string& bookId, int32_t pageNumber, drogon::orm::DbClientPtr tx = nullptr);

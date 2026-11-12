@@ -43,6 +43,8 @@ Json::Value JobStatus::toJson() const {
     json["pages_done"]  = pagesDone;
     json["pages_total"] = pagesTotal;
     json["error"]       = error.empty() ? Json::Value(Json::nullValue) : Json::Value(error);
+    json["warnings"]    = Json::Value(Json::arrayValue);
+    for (const auto& warning : warnings) json["warnings"].append(warning);
     return json;
 }
 
@@ -61,6 +63,18 @@ JobStatus JobStatus::fromHash(const Json::Value& hash) {
     job.error      = hash.get("error", "").asString();
     job.pagesDone  = toInt(hash.get("pages_done", 0));
     job.pagesTotal = toInt(hash.get("pages_total", 0));
+
+    // Stored in the hash as a JSON list in a string: '["120 pictures were left out ..."]'
+    const std::string warnings = hash.get("warnings", "").asString();
+    if (!warnings.empty()) {
+        Json::Value list;
+        Json::CharReaderBuilder reader;
+        std::string errors;
+        std::istringstream in(warnings);
+        if (Json::parseFromStream(reader, in, &list, &errors) && list.isArray()) {
+            for (const auto& warning : list) job.warnings.push_back(warning.asString());
+        }
+    }
     return job;
 }
 
@@ -99,10 +113,16 @@ Task<> JobService::setStatus(const std::string& jobId, const std::string& status
     co_await redis_->execCommandCoro("EXPIRE %s %d", key.c_str(), JOB_TTL_SECONDS);
 }
 
-Task<> JobService::complete(const std::string& jobId, int pages) {
+Task<> JobService::complete(const std::string& jobId, int pages, const std::vector<std::string>& warnings) {
     const std::string key = jobKey(jobId);
-    co_await redis_->execCommandCoro("HSET %s status completed error %s pages_done %d pages_total %d",
-                                     key.c_str(), "", pages, pages);
+    Json::Value list(Json::arrayValue);
+    for (const auto& warning : warnings) list.append(warning);
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    const std::string warningsJson = Json::writeString(writer, list);
+
+    co_await redis_->execCommandCoro("HSET %s status completed error %s pages_done %d pages_total %d warnings %s",
+                                     key.c_str(), "", pages, pages, warningsJson.c_str());
     co_await redis_->execCommandCoro("EXPIRE %s %d", key.c_str(), JOB_TTL_SECONDS);
 }
 

@@ -27,6 +27,10 @@ class BookService {
 
        drogon::Task<std::optional<std::string>> getOwnerId(const std::string& id);
 
+       // For PDF imports: page 1 becomes the cover only if the user hasn't set one.
+       drogon::Task<bool> hasCover(const std::string& id);
+       drogon::Task<bool> setCoverIfMissing(const std::string& id, const std::string& coverKey, drogon::orm::DbClientPtr tx = nullptr);
+
        // ownership (user_books)
        drogon::Task<std::vector<drogon_model::bookstore::Books>> getBooksByUser(const std::string& userId);
 

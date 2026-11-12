@@ -86,8 +86,10 @@ Task<HttpResponsePtr> BookPagesController::UploadPdf(HttpRequestPtr req, std::st
         co_return res::error(k500InternalServerError, "Could not store the uploaded PDF");
     }
 
+    const std::string path = app().getUploadPath() + "/" + fileName;
+
     co_await services_->jobService->create(jobId, bookId, userId);
-    services_->bookPageService->queueExtraction(jobId, bookId, app().getUploadPath() + "/" + fileName);
+    services_->bookPageService->queueExtraction(jobId, bookId, path);
 
     Json::Value data;
     data["job_id"]     = jobId;

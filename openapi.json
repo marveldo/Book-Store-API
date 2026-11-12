@@ -1145,7 +1145,7 @@
             "$ref": "#/components/responses/409"
           }
         },
-        "description": "Book owner or admin. The PDF's text, headings and outline replace **all** the book's pages and table of contents. Runs in the background; only one PDF per book at a time (409 while one is processing).",
+        "description": "Book owner or admin. The PDF's text, headings, pictures and outline replace **all** the book's pages and table of contents. Problems with the PDF itself (password protected, unreadable) end the job as `failed`, reported on the WebSocket. A PDF longer than PDF_MAX_PAGES (2000) imports its first 2000 pages. Runs in the background; only one PDF per book at a time (409 while one is processing). Page 1 becomes the book's cover if it looks like one and the book has none; printed contents pages are removed when the PDF has an outline. The finished job's `warnings` say what was left out.",
         "security": [
           {
             "bearerAuth": []
@@ -2628,6 +2628,17 @@
           "error": {
             "type": "string",
             "nullable": true
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filled when the job completes: what was left out or changed, e.g. pages or pictures over the limit, removed table-of-contents pages, page 1 used as the cover",
+            "example": [
+              "Page 1 looked like a cover, so it was removed from the pages and set as the book's cover",
+              "120 pictures were left out: the limit is 300 per book"
+            ]
           }
         }
       },

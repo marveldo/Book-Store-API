@@ -42,11 +42,13 @@ class Services {
         cloudinaryService = new CloudinaryService(
             settings.cloudinary.cloudName,
             settings.cloudinary.apiKey,
-            settings.cloudinary.apiSecret
+            settings.cloudinary.apiSecret,
+            settings.cloudinary.apiUrl
         );
         jobService = new JobService(settings.redis.host, settings.redis.port, settings.redis.password,
                                     settings.redis.username, settings.redis.db);
-        pdfExtractor = new PdfExtractor(PdfLimits{settings.uploads.pdfMaxPages, settings.uploads.pdfTimeoutSeconds});
+        pdfExtractor = new PdfExtractor(PdfLimits{settings.uploads.pdfMaxPages, settings.uploads.pdfTimeoutSeconds,
+                                                  settings.uploads.pdfMaxImages});
         jwtService = new JwtService(
             settings.jwt.accessSecret, 
             settings.jwt.refreshSecret, 

@@ -107,3 +107,15 @@ Task<bool> BookPageService::deletePage(const std::string& bookId, int32_t pageNu
 void BookPageService::queueExtraction(const std::string& jobId, const std::string& bookId, const std::string& path) {
     events_->Publish(PDF_UPLOADED, PdfUploaded{jobId, bookId, path});
 }
+
+Task<vector<std::string>> BookPageService::imageFolders(const std::string& bookId, DbClientPtr tx) {
+    auto result = co_await db(tx)->execSqlCoro(
+        "SELECT DISTINCT substring(content from ('books/' || $2 || '/([0-9A-Za-z-]+)/')) AS folder "
+        "FROM book_pages WHERE book_id = $1 AND content LIKE ('%books/' || $2 || '/%')",
+        bookId, bookId);
+    vector<std::string> folders;
+    for (const auto& row : result) {
+        if (!row["folder"].isNull()) folders.push_back(row["folder"].as<std::string>());
+    }
+    co_return folders;
+}

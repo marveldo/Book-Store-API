@@ -109,3 +109,16 @@ Task<std::optional<std::string>> BookService::getOwnerId(const std::string& id) 
     if (result[0]["owner_id"].isNull()) co_return std::nullopt;
     co_return result[0]["owner_id"].as<std::string>();
 }
+
+Task<bool> BookService::hasCover(const std::string& id) {
+    auto result = co_await dbClient_->execSqlCoro("SELECT cover_key IS NOT NULL AS has_cover FROM books WHERE id = $1", id);
+    if (result.empty()) throw NotFound("Book not found");
+    co_return result[0]["has_cover"].as<bool>();
+}
+
+Task<bool> BookService::setCoverIfMissing(const std::string& id, const std::string& coverKey, DbClientPtr tx) {
+    auto client = tx ? tx : dbClient_;
+    // "IS NULL" in the same statement: a cover the user set a moment ago is never replaced.
+    auto result = co_await client->execSqlCoro("UPDATE books SET cover_key = $1 WHERE id = $2 AND cover_key IS NULL", coverKey, id);
+    co_return result.affectedRows() > 0;
+}

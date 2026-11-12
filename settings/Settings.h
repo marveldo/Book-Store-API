@@ -42,12 +42,14 @@ struct CloudinarySettings {
     std::string cloudName;
     std::string apiKey;
     std::string apiSecret;
+    std::string apiUrl;          // https://api.cloudinary.com unless overridden (e.g. a mock in tests)
 };
 
 struct UploadSettings {
     size_t pdfMaxBytes;
     int    pdfMaxPages;
     int    pdfTimeoutSeconds;
+    int    pdfMaxImages;
 };
 
 struct Settings {

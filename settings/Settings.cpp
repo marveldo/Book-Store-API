@@ -86,9 +86,11 @@ Settings* getSettings() {
     s->cloudinary.cloudName = dotenv::require("CLOUDINARY_CLOUD_NAME");
     s->cloudinary.apiKey    = dotenv::require("CLOUDINARY_API_KEY");
     s->cloudinary.apiSecret = dotenv::require("CLOUDINARY_API_SECRET");
+    s->cloudinary.apiUrl    = dotenv::get_or("CLOUDINARY_API_URL", "https://api.cloudinary.com");
     s->uploads.pdfMaxBytes  = static_cast<size_t>(toInt("PDF_MAX_MB", "20")) * 1024 * 1024;
     s->uploads.pdfMaxPages  = toInt("PDF_MAX_PAGES", "2000");
     s->uploads.pdfTimeoutSeconds = toInt("PDF_TIMEOUT_SECONDS", "600");
+    s->uploads.pdfMaxImages = toInt("PDF_MAX_IMAGES", "300");
 
     if (s->port < 1 || s->port > 65535) throw std::runtime_error("PORT out of range");
 

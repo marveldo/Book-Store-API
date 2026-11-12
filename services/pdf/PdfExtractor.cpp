@@ -2,6 +2,7 @@
 #include <mupdf/fitz.h>
 #include <nlohmann/json.hpp>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -9,22 +10,26 @@
 #include <memory>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 using nlohmann::json;
 
 namespace {
 
+constexpr size_t STORE_BYTES     = 32 * 1024 * 1024;  // MuPDF's cache; its default is 256 MB
+constexpr size_t MAX_TOC         = 2000;
+constexpr size_t MAX_TOC_TITLE   = 500;
+constexpr size_t MAX_IMAGE_BYTES = 80 * 1024 * 1024;  // all images of one book, kept in memory until uploaded
+constexpr float  PAGE_WIDTH_PX   = 1200;              // rendered pages are at most this wide
+constexpr float  IMAGE_SIDE_PX   = 1600;              // pictures are at most this big on their longest side
+
 // ---------------------------------------------------------------------------
 // MuPDF reports errors with setjmp/longjmp (fz_try / fz_catch), not C++ exceptions.
-// Each helper below wraps exactly one MuPDF call that can fail and turns the
-// failure into a PdfError. Keep them free of C++ objects with destructors:
-// a longjmp skips destructors. Variables set inside fz_try are `volatile`
-// because their value after a longjmp is otherwise undefined.
+// Each helper below wraps the MuPDF calls that can fail and turns the failure into a
+// PdfError. Keep them free of C++ objects with destructors: a longjmp skips destructors.
+// Variables set inside fz_try are `volatile` because their value after a longjmp is
+// otherwise undefined.
 // ---------------------------------------------------------------------------
-
-constexpr size_t STORE_BYTES   = 32 * 1024 * 1024;  // MuPDF's cache; its default is 256 MB
-constexpr size_t MAX_TOC       = 2000;
-constexpr size_t MAX_TOC_TITLE = 500;
 
 [[noreturn]] void fail(fz_context* ctx, const char* what) {
     std::string message = std::string(what) + ": " + fz_caught_message(ctx);
@@ -58,12 +63,59 @@ int countPages(fz_context* ctx, fz_document* doc) {
     return count;
 }
 
-fz_stext_page* loadText(fz_context* ctx, fz_document* doc, int index) {
+fz_page* loadPage(fz_context* ctx, fz_document* doc, int index) {
+    fz_page* volatile page = nullptr;
+    fz_try(ctx) page = fz_load_page(ctx, doc, index);
+    fz_catch(ctx) fail(ctx, "Could not read a page of the PDF");
+    return page;
+}
+
+fz_rect pageBounds(fz_context* ctx, fz_page* page) {
+    fz_rect bounds = fz_empty_rect;
+    fz_try(ctx) bounds = fz_bound_page(ctx, page);
+    fz_catch(ctx) fail(ctx, "Could not measure a page of the PDF");
+    return bounds;
+}
+
+fz_stext_page* loadText(fz_context* ctx, fz_page* page) {
     fz_stext_page* volatile text = nullptr;
     fz_stext_options options{};
-    fz_try(ctx) text = fz_new_stext_page_from_page_number(ctx, doc, index, &options);
+    options.flags = FZ_STEXT_PRESERVE_IMAGES;   // report pictures as blocks, in reading order
+    fz_try(ctx) text = fz_new_stext_page_from_page(ctx, page, &options);
     fz_catch(ctx) fail(ctx, "Could not read a page of the PDF");
     return text;
+}
+
+// Draws part of a page (or all of it) into an RGB picture, white background.
+// Drawing the page area rather than copying the embedded image handles every colour
+// space, mask and rotation the PDF might use.
+fz_pixmap* renderArea(fz_context* ctx, fz_page* page, fz_rect area, float zoom) {
+    fz_pixmap* volatile pix = nullptr;
+    fz_device* volatile dev = nullptr;
+    fz_try(ctx) {
+        const fz_matrix ctm = fz_scale(zoom, zoom);
+        pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), fz_round_rect(fz_transform_rect(area, ctm)), nullptr, 0);
+        fz_clear_pixmap_with_value(ctx, pix, 255);
+        dev = fz_new_draw_device(ctx, fz_identity, pix);   // the zoom goes to fz_run_page only
+        fz_run_page(ctx, page, dev, ctm, nullptr);
+        fz_close_device(ctx, dev);
+    }
+    fz_always(ctx) fz_drop_device(ctx, dev);
+    fz_catch(ctx) {
+        fz_drop_pixmap(ctx, pix);
+        fail(ctx, "Could not draw a page of the PDF");
+    }
+    return pix;
+}
+
+// PNG, not JPEG: MuPDF 1.23's JPEG writer (Ubuntu's version) saves RGB pictures with wrong
+// colours, and its signature changed in later versions. Cloudinary converts the PNG to WebP
+// when it's uploaded, so the size we store stays small.
+fz_buffer* encodePng(fz_context* ctx, fz_pixmap* pix) {
+    fz_buffer* volatile buffer = nullptr;
+    fz_try(ctx) buffer = fz_new_buffer_from_pixmap_as_png(ctx, pix, fz_default_color_params);
+    fz_catch(ctx) fail(ctx, "Could not encode an image from the PDF");
+    return buffer;
 }
 
 fz_outline* loadOutline(fz_context* ctx, fz_document* doc) {
@@ -80,7 +132,7 @@ int outlinePage(fz_context* ctx, fz_document* doc, fz_outline* item) {
     return page;
 }
 
-// Frees MuPDF objects when extractPdf returns or throws.
+// Frees MuPDF objects when they go out of scope, including when a PdfError is thrown.
 struct Context {
     fz_context*  ctx = nullptr;
     fz_document* doc = nullptr;
@@ -89,18 +141,11 @@ struct Context {
         if (ctx) fz_drop_context(ctx);
     }
 };
-
-struct TextPage {
-    fz_context*     ctx;
-    fz_stext_page*  page;
-    ~TextPage() { fz_drop_stext_page(ctx, page); }
-};
-
-struct Outline {
-    fz_context* ctx;
-    fz_outline* root;
-    ~Outline() { if (root) fz_drop_outline(ctx, root); }
-};
+struct Page     { fz_context* ctx; fz_page* page;        ~Page()     { fz_drop_page(ctx, page); } };
+struct TextPage { fz_context* ctx; fz_stext_page* page;  ~TextPage() { fz_drop_stext_page(ctx, page); } };
+struct Outline  { fz_context* ctx; fz_outline* root;     ~Outline()  { if (root) fz_drop_outline(ctx, root); } };
+struct Pixmap   { fz_context* ctx; fz_pixmap* pix;       ~Pixmap()   { fz_drop_pixmap(ctx, pix); } };
+struct Buffer   { fz_context* ctx; fz_buffer* buf;       ~Buffer()   { fz_drop_buffer(ctx, buf); } };
 
 // ---------------------------------------------------------------------------
 // Text
@@ -161,7 +206,6 @@ std::string cleanUtf8(std::string_view in, size_t maxBytes) {
         }
         i += extra + 1;
     }
-    // Trim spaces at both ends.
     const auto first = out.find_first_not_of(' ');
     if (first == std::string::npos) return "";
     return out.substr(first, out.find_last_not_of(' ') - first + 1);
@@ -173,10 +217,17 @@ struct Run {
     bool italic;
 };
 
+// One thing on a page, in reading order: a block of text or a picture.
 struct Block {
-    std::vector<Run> runs;
+    bool        isImage = false;
+    fz_rect     rect{};          // position on the page
+    std::string imageId;         // public id, once the picture has been rendered
+
+    std::vector<Run> runs;       // text blocks only
     double sizeSum = 0;
     size_t chars   = 0;
+    int    lines   = 0;
+    int    numberedLines = 0;    // lines ending in a page number ("Chapter 3 .... 47")
 
     double size() const { return chars ? sizeSum / chars : 0; }
 
@@ -213,7 +264,14 @@ struct Block {
     }
 };
 
-using RawPage = std::vector<Block>;
+enum class PageKind { Text, Image, Cover, Skip };
+
+struct RawPage {
+    PageKind kind = PageKind::Text;
+    std::vector<Block> blocks;
+    fz_rect bounds{};
+    std::string imageId;   // Image pages: the rendered page
+};
 
 struct FontStyle {
     bool bold;
@@ -240,28 +298,60 @@ bool isLowercaseLetter(int c) {
     return (c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7);
 }
 
-// Page numbers printed in headers/footers ("12") aren't content.
-bool isPageNumber(const std::string& text) {
-    return !text.empty() && text.size() <= 4 && std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; });
+bool isDigits(std::string_view s) {
+    return !s.empty() && std::all_of(s.begin(), s.end(), [](char c) { return c >= '0' && c <= '9'; });
 }
 
-RawPage readPage(fz_context* ctx, fz_stext_page* page, std::map<long, size_t>& sizes) {
-    RawPage blocks;
+// Page numbers printed in headers/footers ("12") aren't content.
+bool isPageNumber(const std::string& text) {
+    return text.size() <= 4 && isDigits(text);
+}
+
+// "Chapter 3 ........ 47" or "Preface ..... xiii": the last word is a page number.
+bool endsWithPageNumber(const std::string& line) {
+    const auto end = line.find_last_not_of(' ');
+    if (end == std::string::npos) return false;
+    const auto start = line.find_last_of(' ', end);
+    std::string_view last(line.data() + (start == std::string::npos ? 0 : start + 1),
+                          end - (start == std::string::npos ? 0 : start + 1) + 1);
+    while (!last.empty() && last.front() == '.') last.remove_prefix(1);   // dot leaders stuck to the number
+    if (isDigits(last) && last.size() <= 4) return true;
+    return !last.empty() && last.size() <= 6 &&
+           std::all_of(last.begin(), last.end(), [](char c) { return std::string_view("ivxlc").find(c) != std::string_view::npos; });
+}
+
+float area(const fz_rect& r) {
+    return std::max(0.0f, r.x1 - r.x0) * std::max(0.0f, r.y1 - r.y0);
+}
+
+RawPage readPage(fz_context* ctx, fz_stext_page* page, fz_rect bounds, std::map<long, size_t>& sizes) {
+    RawPage raw;
+    raw.bounds = bounds;
     std::unordered_map<fz_font*, FontStyle> fonts;
 
     for (fz_stext_block* b = page->first_block; b; b = b->next) {
-        if (b->type != FZ_STEXT_BLOCK_TEXT) continue;   // images come in a later version
+        if (b->type == FZ_STEXT_BLOCK_IMAGE) {
+            Block picture;
+            picture.isImage = true;
+            picture.rect = fz_intersect_rect(b->bbox, bounds);
+            raw.blocks.push_back(picture);
+            continue;
+        }
+        if (b->type != FZ_STEXT_BLOCK_TEXT) continue;
 
         Block block;
+        block.rect = b->bbox;
         bool lineBreak = false;
         for (fz_stext_line* line = b->u.t.first_line; line; line = line->next) {
             if (!block.runs.empty()) lineBreak = true;
+            std::string lineText;   // plain copy, only to spot page numbers at the end
 
             for (fz_stext_char* ch = line->first_char; ch; ch = ch->next) {
                 int c = ch->c;
                 if (!keep(c)) continue;
                 if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0xA0) {
                     block.addSpace();
+                    lineText += ' ';
                     continue;
                 }
 
@@ -278,15 +368,144 @@ RawPage readPage(fz_context* ctx, fz_stext_page* page, std::map<long, size_t>& s
                 const FontStyle style = styleOf(ctx, ch->font, fonts);
                 block.addChar(c, style.bold, style.italic, ch->size);
                 sizes[std::lround(ch->size * 2)]++;
+                if (c < 0x80) lineText += static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c);
             }
+
+            block.lines++;
+            if (endsWithPageNumber(lineText)) block.numberedLines++;
         }
 
         block.trim();
         if (block.chars == 0 || isPageNumber(block.text())) continue;
-        blocks.push_back(std::move(block));
+        raw.blocks.push_back(std::move(block));
     }
-    return blocks;
+    return raw;
 }
+
+// ---------------------------------------------------------------------------
+// Deciding what kind of page this is
+// ---------------------------------------------------------------------------
+
+struct PageStats {
+    size_t chars = 0;
+    int    textBlocks = 0;
+    int    tinyBlocks = 0;      // 1-2 characters: a letter on its own
+    int    words = 0;
+    int    oneLetterWords = 0;
+    int    longWords = 0;       // 25+ letters: words glued together
+    int    lines = 0;
+    int    numberedLines = 0;
+    bool   contentsHeading = false;
+    float  imageShare = 0;      // part of the page covered by pictures (0..1)
+};
+
+PageStats statsOf(const RawPage& page) {
+    PageStats s;
+    float imageArea = 0;
+    for (const auto& block : page.blocks) {
+        if (block.isImage) { imageArea += area(block.rect); continue; }
+
+        const std::string text = block.text();
+        s.chars += block.chars;
+        s.textBlocks++;
+        if (block.chars <= 2) s.tinyBlocks++;
+        s.lines += block.lines;
+        s.numberedLines += block.numberedLines;
+
+        size_t start = 0;
+        while (start < text.size()) {
+            size_t end = text.find(' ', start);
+            if (end == std::string::npos) end = text.size();
+            const size_t length = end - start;
+            if (length > 0) {
+                s.words++;
+                if (length == 1) s.oneLetterWords++;
+                if (length >= 25) s.longWords++;
+            }
+            start = end + 1;
+        }
+
+        // "Contents", "Brief Contents", "Contents in Detail", "Table of Contents"
+        if (s.textBlocks <= 3 && text.size() <= 40) {
+            std::string lower = text;
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+            if (lower.find("contents") != std::string::npos) s.contentsHeading = true;
+        }
+    }
+    const float pageArea = area(page.bounds);
+    s.imageShare = pageArea > 0 ? std::min(1.0f, imageArea / pageArea) : 0;
+    return s;
+}
+
+// Decorative type (covers, title pages): letters one per line, letter-spaced titles that
+// come out as one giant word, or "A N I N T R O ..." one letter at a time.
+bool looksLikeGarbage(const PageStats& s) {
+    if (s.textBlocks >= 6 && s.tinyBlocks * 100 >= s.textBlocks * 35) return true;
+    if (s.words >= 10 && s.oneLetterWords * 2 >= s.words) return true;
+    return s.longWords >= 2;
+}
+
+PageKind classify(const PageStats& s, int index, int pageCount, bool hasOutline, bool previousWasToc) {
+    const bool garbage = looksLikeGarbage(s);
+    if (index == 0 && (garbage || s.imageShare >= 0.25f)) return PageKind::Cover;
+
+    // The book's printed table of contents. Only dropped when the PDF has an outline,
+    // because that is what fills book_toc instead.
+    const bool early = index < std::max(10, pageCount * 15 / 100);
+    if (hasOutline && early && s.lines >= 5 && s.numberedLines * 10 >= s.lines * 4 &&
+        (s.contentsHeading || previousWasToc)) {
+        return PageKind::Skip;
+    }
+
+    if (garbage) return PageKind::Image;
+    if (s.imageShare >= 0.6f && s.chars < 400) return PageKind::Image;   // a full-page picture with a caption
+    return PageKind::Text;
+}
+
+// ---------------------------------------------------------------------------
+// Running headers and footers ("www.itpub.net", the chapter title on every page)
+// ---------------------------------------------------------------------------
+
+bool inMargin(const Block& block, const fz_rect& bounds) {
+    const float height = bounds.y1 - bounds.y0;
+    return block.rect.y1 <= bounds.y0 + height * 0.09f || block.rect.y0 >= bounds.y1 - height * 0.09f;
+}
+
+// Same line on different pages: ignore case and the page number in it.
+std::string marginKey(const Block& block) {
+    std::string key;
+    for (char c : block.text()) {
+        if (c >= '0' && c <= '9') { if (key.empty() || key.back() != '#') key += '#'; }
+        else key += static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c);
+    }
+    return key;
+}
+
+void removeRunningHeaders(std::vector<RawPage>& pages) {
+    int textPages = 0;
+    std::unordered_map<std::string, int> seen;   // key -> pages it appears on
+    for (const auto& page : pages) {
+        if (page.kind != PageKind::Text) continue;
+        textPages++;
+        std::unordered_set<std::string> onThisPage;
+        for (const auto& block : page.blocks) {
+            if (!block.isImage && block.chars <= 120 && inMargin(block, page.bounds)) onThisPage.insert(marginKey(block));
+        }
+        for (const auto& key : onThisPage) seen[key]++;
+    }
+
+    const int threshold = std::max(3, textPages * 30 / 100);
+    for (auto& page : pages) {
+        if (page.kind != PageKind::Text) continue;
+        std::erase_if(page.blocks, [&](const Block& block) {
+            return !block.isImage && block.chars <= 120 && inMargin(block, page.bounds) && seen[marginKey(block)] >= threshold;
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TipTap
+// ---------------------------------------------------------------------------
 
 // The most common font size in the book is the body text. Noticeably bigger,
 // short blocks are headings.
@@ -299,33 +518,43 @@ int headingLevel(const Block& block, double bodySize) {
     return 0;
 }
 
-// TipTap / ProseMirror document: {"type":"doc","content":[ paragraphs and headings ]}
-std::string toTipTap(const RawPage& blocks, double bodySize) {
+json imageNode(const std::string& src, const std::string& alt) {
+    return {{"type", "image"}, {"attrs", {{"src", src}, {"alt", alt}, {"title", nullptr}}}};
+}
+
+// TipTap / ProseMirror document: {"type":"doc","content":[ paragraphs, headings, images ]}
+std::string toTipTap(const RawPage& page, double bodySize, const PdfImageOptions& images) {
     json content = json::array();
 
-    for (const auto& block : blocks) {
-        json node;
-        const int level = headingLevel(block, bodySize);
-        if (level > 0) {
-            node = {{"type", "heading"}, {"attrs", {{"level", level}}}};
-        } else {
-            node = {{"type", "paragraph"}};
-        }
+    if (page.kind == PageKind::Image && !page.imageId.empty()) {
+        content.push_back(imageNode(images.urlFor(page.imageId), ""));
+    } else {
+        for (const auto& block : page.blocks) {
+            if (block.isImage) {
+                if (!block.imageId.empty()) content.push_back(imageNode(images.urlFor(block.imageId), ""));
+                continue;
+            }
 
-        json texts = json::array();
-        for (const auto& run : block.runs) {
-            if (run.text.empty()) continue;
-            json text = {{"type", "text"}, {"text", run.text}};
-            json marks = json::array();
-            // Headings are bold already; marking them bold again is just noise.
-            if (run.bold && level == 0) marks.push_back({{"type", "bold"}});
-            if (run.italic)            marks.push_back({{"type", "italic"}});
-            if (!marks.empty()) text["marks"] = marks;
-            texts.push_back(std::move(text));
+            json node;
+            const int level = headingLevel(block, bodySize);
+            if (level > 0) node = {{"type", "heading"}, {"attrs", {{"level", level}}}};
+            else           node = {{"type", "paragraph"}};
+
+            json texts = json::array();
+            for (const auto& run : block.runs) {
+                if (run.text.empty()) continue;
+                json text = {{"type", "text"}, {"text", run.text}};
+                json marks = json::array();
+                // Headings are bold already; marking them bold again is just noise.
+                if (run.bold && level == 0) marks.push_back({{"type", "bold"}});
+                if (run.italic)            marks.push_back({{"type", "italic"}});
+                if (!marks.empty()) text["marks"] = marks;
+                texts.push_back(std::move(text));
+            }
+            if (texts.empty()) continue;
+            node["content"] = std::move(texts);
+            content.push_back(std::move(node));
         }
-        if (texts.empty()) continue;
-        node["content"] = std::move(texts);
-        content.push_back(std::move(node));
     }
 
     // ProseMirror needs at least one block in a doc, so a blank page is one empty paragraph.
@@ -335,12 +564,38 @@ std::string toTipTap(const RawPage& blocks, double bodySize) {
     return doc.dump(-1, ' ', false, json::error_handler_t::replace);
 }
 
+// ---------------------------------------------------------------------------
+// Images
+// ---------------------------------------------------------------------------
+
+class ImageBudget {
+public:
+    explicit ImageBudget(int maxImages) : left_(maxImages) {}
+    bool allows() const { return left_ > 0 && bytes_ < MAX_IMAGE_BYTES; }
+    void spend(size_t bytes) { left_--; bytes_ += bytes; }
+    void refuse() { refused_++; }
+    int  refused() const { return refused_; }
+    bool outOfBytes() const { return bytes_ >= MAX_IMAGE_BYTES; }
+private:
+    int    left_;
+    size_t bytes_ = 0;
+    int    refused_ = 0;     // pictures and image pages left out
+};
+
+ExtractedImage render(fz_context* ctx, fz_page* page, fz_rect area, float zoom) {
+    Pixmap pixmap{ctx, renderArea(ctx, page, area, zoom)};
+    Buffer buffer{ctx, encodePng(ctx, pixmap.pix)};
+    unsigned char* data = nullptr;
+    const size_t size = fz_buffer_storage(ctx, buffer.buf, &data);
+    return ExtractedImage{"", std::string(reinterpret_cast<const char*>(data), size), "image/png"};
+}
+
 void readOutline(fz_context* ctx, fz_document* doc, fz_outline* item, int level, int pageCount, std::vector<TocEntry>& toc) {
     for (; item && toc.size() < MAX_TOC; item = item->next) {
         const int page = outlinePage(ctx, doc, item);
         const std::string title = item->title ? cleanUtf8(item->title, MAX_TOC_TITLE) : "";
         if (page >= 0 && page < pageCount && !title.empty()) {
-            toc.push_back(TocEntry{title, level, page + 1});
+            toc.push_back(TocEntry{title, level, page + 1});   // PDF page number for now, remapped later
         }
         if (item->down) readOutline(ctx, doc, item->down, level + 1, pageCount, toc);
     }
@@ -348,7 +603,8 @@ void readOutline(fz_context* ctx, fz_document* doc, fz_outline* item, int level,
 
 }  // namespace
 
-ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const PdfProgress& progress) {
+ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const PdfImageOptions& images,
+                        const PdfProgress& progress) {
     const auto started = std::chrono::steady_clock::now();
 
     Context mu;
@@ -358,16 +614,24 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
 
     if (isLocked(mu.ctx, mu.doc)) throw PdfError("The PDF is password protected");
 
-    const int pageCount = countPages(mu.ctx, mu.doc);
-    if (pageCount <= 0) throw PdfError("The PDF has no pages");
-    if (pageCount > limits.maxPages) {
-        throw PdfError("The PDF has " + std::to_string(pageCount) + " pages; the limit is " + std::to_string(limits.maxPages));
-    }
+    const int totalPages = countPages(mu.ctx, mu.doc);
+    if (totalPages <= 0) throw PdfError("The PDF has no pages");
+    // Longer than the limit: import the first maxPages pages and say so, rather than failing.
+    const int pageCount = std::min(totalPages, limits.maxPages);
 
-    // Pass 1: read every page's text and count font sizes.
+    ExtractedPdf result;
+
+    // The outline first: whether it exists decides if printed contents pages can be dropped.
+    Outline outline{mu.ctx, loadOutline(mu.ctx, mu.doc)};
+    readOutline(mu.ctx, mu.doc, outline.root, 0, pageCount, result.toc);
+    const bool hasOutline = !result.toc.empty();
+
+    // Pass 1: read each page, decide what kind it is, render its pictures.
     std::vector<RawPage> raw;
     raw.reserve(pageCount);
     std::map<long, size_t> sizes;
+    ImageBudget budget(limits.maxImages);
+    bool previousWasToc = false;
 
     for (int i = 0; i < pageCount; i++) {
         const auto elapsed = std::chrono::steady_clock::now() - started;
@@ -375,27 +639,98 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
             throw PdfError("Processing the PDF took longer than " + std::to_string(limits.timeoutSeconds) + " seconds");
         }
 
-        TextPage text{mu.ctx, loadText(mu.ctx, mu.doc, i)};
-        raw.push_back(readPage(mu.ctx, text.page, sizes));
+        Page page{mu.ctx, loadPage(mu.ctx, mu.doc, i)};
+        const fz_rect bounds = pageBounds(mu.ctx, page.page);
+        TextPage text{mu.ctx, loadText(mu.ctx, page.page)};
+
+        RawPage current = readPage(mu.ctx, text.page, bounds, sizes);
+        current.kind = classify(statsOf(current), i, pageCount, hasOutline, previousWasToc);
+        previousWasToc = current.kind == PageKind::Skip;
+
+        const float pageWidth = std::max(1.0f, bounds.x1 - bounds.x0);
+        const float pageZoom  = std::min(2.0f, PAGE_WIDTH_PX / pageWidth);
+
+        if (current.kind == PageKind::Cover) {
+            result.cover = render(mu.ctx, page.page, bounds, pageZoom);
+        } else if (current.kind == PageKind::Image) {
+            if (budget.allows()) {
+                ExtractedImage image = render(mu.ctx, page.page, bounds, pageZoom);
+                image.publicId = images.prefix + "/p" + std::to_string(i + 1);
+                budget.spend(image.data.size());
+                current.imageId = image.publicId;
+                result.images.push_back(std::move(image));
+            } else {
+                budget.refuse();
+                current.kind = PageKind::Text;   // out of image budget: keep whatever text it has
+            }
+        } else if (current.kind == PageKind::Text) {
+            int n = 0;
+            for (auto& block : current.blocks) {
+                if (!block.isImage) continue;
+                const float w = block.rect.x1 - block.rect.x0, h = block.rect.y1 - block.rect.y0;
+                // Skip bullets, icons, rules and other decorations.
+                if (w < 40 || h < 40 || area(block.rect) < area(bounds) * 0.01f) continue;
+                if (!budget.allows()) { budget.refuse(); continue; }
+
+                const float zoom = std::min(2.0f, IMAGE_SIDE_PX / std::max(w, h));
+                ExtractedImage image = render(mu.ctx, page.page, block.rect, zoom);
+                image.publicId = images.prefix + "/p" + std::to_string(i + 1) + "-" + std::to_string(++n);
+                budget.spend(image.data.size());
+                block.imageId = image.publicId;
+                result.images.push_back(std::move(image));
+            }
+        }
+
+        if (current.kind != PageKind::Text) current.blocks.clear();   // nothing else needed from them
+        raw.push_back(std::move(current));
         if (progress) progress(i + 1, pageCount);
     }
 
-    // Pass 2: now that the body size is known, turn each page into a TipTap document.
+    removeRunningHeaders(raw);
+
+    // Pass 2: the body text size is known now, so build each page's TipTap document.
     double bodySize = 0;
     size_t most = 0;
     for (const auto& [halfPoints, count] : sizes) {
         if (count > most) { most = count; bodySize = halfPoints / 2.0; }
     }
 
-    ExtractedPdf result;
-    result.pages.reserve(pageCount);
+    // Dropped pages (cover, printed contents) shift the rest up: PDF page -> book page.
+    std::vector<int> bookPage(pageCount, 0);
+    int next = 0;
     for (int i = 0; i < pageCount; i++) {
-        result.pages.push_back(PageContent{i + 1, toTipTap(raw[i], bodySize)});
-        RawPage().swap(raw[i]);   // free as we go
+        if (raw[i].kind == PageKind::Cover || raw[i].kind == PageKind::Skip) {
+            if (raw[i].kind == PageKind::Skip) result.skippedPages++;
+            continue;
+        }
+        bookPage[i] = ++next;
+        result.pages.push_back(PageContent{next, toTipTap(raw[i], bodySize, images)});
+        raw[i] = RawPage();   // free as we go
+    }
+    if (result.pages.empty()) throw PdfError("The PDF has no readable pages");
+
+    // Things the user should know were left out. The cover is reported by the task handler,
+    // which knows whether it was used.
+    if (totalPages > pageCount) {
+        result.warnings.push_back("Only the first " + std::to_string(pageCount) + " of " + std::to_string(totalPages) +
+            " pages were imported: the limit is " + std::to_string(limits.maxPages) + " pages per book");
+    }
+    if (budget.refused() > 0) {
+        result.warnings.push_back(std::to_string(budget.refused()) + " picture" + (budget.refused() == 1 ? " was" : "s were") +
+            " left out: " + (budget.outOfBytes() ? "the book's pictures reached the 80 MB limit"
+                                                 : "the limit is " + std::to_string(limits.maxImages) + " per book"));
+    }
+    if (result.skippedPages > 0) {
+        result.warnings.push_back(std::to_string(result.skippedPages) + " printed table of contents page" +
+            (result.skippedPages == 1 ? " was" : "s were") + " removed; the table of contents comes from the PDF's outline instead");
     }
 
-    Outline outline{mu.ctx, loadOutline(mu.ctx, mu.doc)};
-    readOutline(mu.ctx, mu.doc, outline.root, 0, pageCount, result.toc);
+    // An entry pointing at a dropped page goes to the next page that was kept.
+    for (auto& entry : result.toc) {
+        int pdfIndex = entry.pageNumber - 1;
+        while (pdfIndex < pageCount && bookPage[pdfIndex] == 0) pdfIndex++;
+        entry.pageNumber = pdfIndex < pageCount ? bookPage[pdfIndex] : next;
+    }
 
     return result;
 }
@@ -404,7 +739,7 @@ PdfExtractor::PdfExtractor(PdfLimits limits) : limits_(limits), thread_("PdfExtr
     thread_.run();
 }
 
-drogon::Task<ExtractedPdf> PdfExtractor::extract(std::string path, PdfProgress progress) {
+drogon::Task<ExtractedPdf> PdfExtractor::extract(std::string path, PdfImageOptions images, PdfProgress progress) {
     trantor::EventLoop* origin = trantor::EventLoop::getEventLoopOfCurrentThread();
 
     // Only one thread does extraction, so a second PDF waits for the first to finish.
@@ -412,7 +747,7 @@ drogon::Task<ExtractedPdf> PdfExtractor::extract(std::string path, PdfProgress p
     std::exception_ptr error;
     co_await drogon::queueInLoopCoro(thread_.getLoop(), [&]() {
         try {
-            result = extractPdf(path, limits_, progress);
+            result = extractPdf(path, limits_, images, progress);
         } catch (...) {
             error = std::current_exception();
         }

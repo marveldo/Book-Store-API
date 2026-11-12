@@ -3,6 +3,9 @@
 #include "utils/DbErrors.hpp"
 #include "utils/Errors.hpp"
 #include "queues/TaskErrors.hpp"
+#include "utils/Media.hpp"
+#include <exception>
+#include <optional>
 #include <algorithm>
 #include <filesystem>
 #include <memory>
@@ -24,6 +27,15 @@ namespace {
                 jobs->publishAsync(jobId);
             }
         };
+    }
+
+    // Cleanup that mustn't hide the real error: log and carry on.
+    drogon::Task<> deleteImagesQuietly(CloudinaryService* cloud, std::string prefix) {
+        try {
+            co_await cloud->deleteByPrefix(prefix);
+        } catch (const std::exception& e) {
+            LOG_WARN << "extract_pdf: could not delete images under " << prefix << ": " << e.what();
+        }
     }
 }
 
@@ -59,28 +71,77 @@ void registerTaskHandlers(TaskQueue* queue, EmailService* email, Services* servi
         co_await jobs->setStatus(jobId, "processing");
         co_await jobs->publish(jobId);
 
+        // Pictures are named after the book and this job, so a failed import can be cleaned
+        // up without touching the images of the version currently shown.
+        const std::string folder = "books/" + bookId + "/" + jobId;
+        const PdfImageOptions imageOptions{folder, [](const std::string& publicId) { return imageUrl(publicId); }};
+
         ExtractedPdf pdf;
         try {
-            pdf = co_await services->pdfExtractor->extract(path, progressReporter(jobs, jobId));
+            pdf = co_await services->pdfExtractor->extract(path, imageOptions, progressReporter(jobs, jobId));
         } catch (const PdfError& e) {
             throw PermanentTaskError(e.what());   // a broken PDF stays broken
         }
 
-        // All pages and the TOC are saved together or not at all.
+        CloudinaryService* cloud = services->cloudinaryService;
+        std::optional<std::string> coverKey;
+        bool coverUsed = false;
+        std::vector<std::string> oldFolders;
+        std::exception_ptr failure;
         try {
+            // 1. Upload the pictures. The pages point at them, so they must exist before the pages are saved.
+            std::vector<ImageUpload> uploads;
+            for (const auto& image : pdf.images) uploads.push_back(ImageUpload{image.publicId, &image.data, image.mime});
+            co_await cloud->uploadAll(std::move(uploads));
+
+            // 2. Page 1 looked like a cover: it becomes the book's cover, unless the user already set one.
+            bool needsCover = false;
+            if (pdf.cover) needsCover = !(co_await services->bookService->hasCover(bookId));
+            if (needsCover) {
+                coverKey = "covers/" + drogon::utils::getUuid();
+                std::vector<ImageUpload> cover{ImageUpload{*coverKey, &pdf.cover->data, pdf.cover->mime}};
+                co_await cloud->uploadAll(std::move(cover));
+            }
+
+            // 3. Pages, table of contents and cover together, or not at all.
             co_await services->bookService->withTransaction([&](drogon::orm::DbClientPtr tx) -> drogon::Task<> {
+                oldFolders = co_await services->bookPageService->imageFolders(bookId, tx);
                 co_await services->bookPageService->replacePages(bookId, pdf.pages, tx);
                 co_await services->bookTocService->replaceToc(bookId, pdf.toc, tx);
+                if (coverKey) coverUsed = co_await services->bookService->setCoverIfMissing(bookId, *coverKey, tx);
             });
-        } catch (const NotFound&) {
-            throw PermanentTaskError("The book was deleted before its PDF finished processing");
-        } catch (const drogon::orm::Failure& e) {
-            if (isForeignKeyViolation(e)) throw PermanentTaskError("The book was deleted before its PDF finished processing");
-            throw;
+        } catch (...) {
+            failure = std::current_exception();   // co_await isn't allowed inside catch, so clean up below
         }
 
+        if (failure) {
+            // Nothing points at this job's images now. Delete them, then report the real error.
+            co_await deleteImagesQuietly(cloud, folder + "/");
+            if (coverKey) co_await deleteImagesQuietly(cloud, *coverKey);
+            try {
+                std::rethrow_exception(failure);
+            } catch (const NotFound&) {
+                throw PermanentTaskError("The book was deleted before its PDF finished processing");
+            } catch (const drogon::orm::Failure& e) {
+                if (isForeignKeyViolation(e)) throw PermanentTaskError("The book was deleted before its PDF finished processing");
+                throw;
+            }
+        }
+
+        // The pages now use this job's images: the ones from earlier imports of this book can go.
+        for (const auto& old : oldFolders) {
+            if (old != jobId) co_await deleteImagesQuietly(cloud, "books/" + bookId + "/" + old + "/");
+        }
+        if (coverKey && !coverUsed) co_await deleteImagesQuietly(cloud, *coverKey);   // the user set a cover meanwhile
+
         removeFile(path);
-        co_await jobs->complete(jobId, static_cast<int>(pdf.pages.size()));
+        std::vector<std::string> warnings;
+        if (pdf.cover) {
+            warnings.push_back(coverUsed ? "Page 1 looked like a cover, so it was removed from the pages and set as the book's cover"
+                                         : "Page 1 looked like a cover, so it was removed from the pages (the book already has a cover)");
+        }
+        warnings.insert(warnings.end(), pdf.warnings.begin(), pdf.warnings.end());
+        co_await jobs->complete(jobId, static_cast<int>(pdf.pages.size()), warnings);
         co_await jobs->publish(jobId);
         co_await jobs->unlockBook(bookId, jobId);
     }, {timed("extract_pdf")},
