@@ -19,8 +19,8 @@ class BookPagesController : public drogon::HttpController<BookPagesController, f
     ADD_METHOD_VIA_REGEX(BookPagesController::CreatePage, API_V1 + "/books/([0-9a-fA-F-]{36})/pages", Post, "JwtMiddleWare", "BookOwnerOrAdminMiddleware");
     ADD_METHOD_VIA_REGEX(BookPagesController::UpdatePage, API_V1 + "/books/([0-9a-fA-F-]{36})/pages/([0-9]{1,6})", Put, "JwtMiddleWare", "BookOwnerOrAdminMiddleware");
     ADD_METHOD_VIA_REGEX(BookPagesController::DeletePage, API_V1 + "/books/([0-9a-fA-F-]{36})/pages/([0-9]{1,6})", Delete, "JwtMiddleWare", "BookOwnerOrAdminMiddleware");
-    ADD_METHOD_VIA_REGEX(BookPagesController::UploadPdf, API_V1 + "/books/([0-9a-fA-F-]{36})/pdf", Post, "JwtMiddleWare", "BookOwnerOrAdminMiddleware");
-    ADD_METHOD_VIA_REGEX(BookPagesController::ImageSignature, API_V1 + "/books/([0-9a-fA-F-]{36})/images/signature", Post, "JwtMiddleWare", "BookOwnerOrAdminMiddleware");
+    ADD_METHOD_VIA_REGEX(BookPagesController::UploadPdf, API_V1 + "/books/([0-9a-fA-F-]{36})/pdf", Post, "JwtMiddleWare", "PdfUploadRateLimit", "BookOwnerOrAdminMiddleware");
+    ADD_METHOD_VIA_REGEX(BookPagesController::ImageSignature, API_V1 + "/books/([0-9a-fA-F-]{36})/images/signature", Post, "JwtMiddleWare", "SignatureRateLimit", "BookOwnerOrAdminMiddleware");
     METHOD_LIST_END
 
     Task<HttpResponsePtr> ListPages(HttpRequestPtr req, std::string bookId);

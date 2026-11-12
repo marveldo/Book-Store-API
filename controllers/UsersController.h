@@ -18,7 +18,7 @@ class UsersController : public drogon::HttpController<UsersController , false>
     // METHOD_ADD(UsersController::get, "/{2}/{1}", Get); // path is /UsersController/{arg2}/{arg1}
     // METHOD_ADD(UsersController::your_method_name, "/{1}/{2}/list", Get); // path is /UsersController/{arg1}/{arg2}/list
     // ADD_METHOD_TO(UsersController::your_method_name, "/absolute/path/{1}/{2}/list", Get); // path is /absolute/path/{arg1}/{arg2}/list
-    ADD_METHOD_TO(UsersController::CreateUser, API_V1 + "/users", Post);
+    ADD_METHOD_TO(UsersController::CreateUser, API_V1 + "/users", Post, "SignupRateLimit");
     ADD_METHOD_TO(UsersController::GetAllUsers, API_V1 + "/users", Get, "JwtMiddleWare", "AdminMiddleware");
     ADD_METHOD_VIA_REGEX(UsersController::GetUserById, API_V1 + "/users/([0-9a-fA-F-]{36})", Get , "JwtMiddleWare", "AccountOwnerMiddleware");
     ADD_METHOD_VIA_REGEX(UsersController::UpdateUser,  API_V1 + "/users/([0-9a-fA-F-]{36})", Put , "JwtMiddleWare", "AccountOwnerMiddleware");

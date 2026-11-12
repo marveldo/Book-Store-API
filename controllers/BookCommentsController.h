@@ -15,7 +15,7 @@ class BookCommentsController : public drogon::HttpController<BookCommentsControl
 
     METHOD_LIST_BEGIN
     ADD_METHOD_VIA_REGEX(BookCommentsController::ListComments, API_V1 + "/books/([0-9a-fA-F-]{36})/comments", Get);
-    ADD_METHOD_VIA_REGEX(BookCommentsController::AddComment, API_V1 + "/books/([0-9a-fA-F-]{36})/comments", Post, "JwtMiddleWare");
+    ADD_METHOD_VIA_REGEX(BookCommentsController::AddComment, API_V1 + "/books/([0-9a-fA-F-]{36})/comments", Post, "JwtMiddleWare", "CommentRateLimit");
     ADD_METHOD_VIA_REGEX(BookCommentsController::UpdateComment, API_V1 + "/books/([0-9a-fA-F-]{36})/comments/([0-9a-fA-F-]{36})", Put, "JwtMiddleWare");
     ADD_METHOD_VIA_REGEX(BookCommentsController::DeleteComment, API_V1 + "/books/([0-9a-fA-F-]{36})/comments/([0-9a-fA-F-]{36})", Delete, "JwtMiddleWare", "CommentAuthorOrAdminMiddleware");
     METHOD_LIST_END

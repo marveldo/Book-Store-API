@@ -15,8 +15,8 @@ class AuthController : public drogon::HttpController<AuthController, false>
     explicit AuthController(Services* srv) : services_(srv) {}
 
     METHOD_LIST_BEGIN
-    ADD_METHOD_TO(AuthController::Login, API_V1 + "/auth/login", Post);
-    ADD_METHOD_TO(AuthController::Refresh, API_V1 + "/auth/refresh", Post);
+    ADD_METHOD_TO(AuthController::Login, API_V1 + "/auth/login", Post, "LoginRateLimit");
+    ADD_METHOD_TO(AuthController::Refresh, API_V1 + "/auth/refresh", Post, "RefreshRateLimit");
     METHOD_LIST_END
 
     Task<HttpResponsePtr> Login(HttpRequestPtr req);

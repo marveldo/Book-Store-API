@@ -3,7 +3,7 @@
   "info": {
     "title": "Mbooks API",
     "version": "1.0.0",
-    "description": "C++ (Drogon) API for Mbooks: books, pages, PDF import, table of contents, comments, orders and payments.\n\nEvery JSON response is wrapped: `{ \"success\": true, \"data\": … }` or `{ \"success\": false, \"error\": { \"message\", \"details\"? } }`.\n\nRequest bodies reject unknown fields (400)."
+    "description": "C++ (Drogon) API for Mbooks: books, pages, PDF import, table of contents, comments, orders and payments.\n\nEvery JSON response is wrapped: `{ \"success\": true, \"data\": … }` or `{ \"success\": false, \"error\": { \"message\", \"details\"? } }`.\n\nRequest bodies reject unknown fields (400).\n\n**Rate limits** (429 with a Retry-After header): every logged-in user gets 120 requests a minute in total; login, sign-up, token refresh, comments, PDF uploads and image signatures have their own limits, listed on each route. Limits are per user or per email, never per IP address."
   },
   "servers": [
     {
@@ -116,8 +116,12 @@
           },
           "400": {
             "$ref": "#/components/responses/400"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
+        "description": "Limited to 5 attempts per email per 15 minutes (429).",
         "security": [],
         "requestBody": {
           "required": true,
@@ -163,6 +167,9 @@
           },
           "400": {
             "$ref": "#/components/responses/400"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
         "description": "Swap a refresh token for new tokens without logging in again. Call it when a request gets 401 because the access token expired (JWT_ACCESS_EXPIRATION, e.g. 15m); the refresh token itself lasts JWT_REFRESH_EXPIRATION (e.g. 7d).\n\nThe user is loaded from the database, so a deleted account can't refresh, and a changed email or role is in the new tokens.\n\n401 when the refresh token is invalid, expired, an access token, or the account no longer exists: send the user to log in.",
@@ -214,8 +221,12 @@
           },
           "409": {
             "$ref": "#/components/responses/409"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
+        "description": "Limited to 30 sign-ups per minute across everyone (429).",
         "security": [],
         "requestBody": {
           "required": true,
@@ -595,9 +606,12 @@
           },
           "401": {
             "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
-        "description": "1. Call this. 2. POST the image (`file`) plus every entry of `fields` as multipart/form-data to `upload_url` (straight to Cloudinary). 3. Send Cloudinary's `public_id` as `cover` when creating or updating the book.",
+        "description": "1. Call this. 2. POST the image (`file`) plus every entry of `fields` as multipart/form-data to `upload_url` (straight to Cloudinary). 3. Send Cloudinary's `public_id` as `cover` when creating or updating the book. Cover and image signatures together are limited to 60 per user per hour (429).",
         "security": [
           {
             "bearerAuth": []
@@ -1191,9 +1205,12 @@
           },
           "409": {
             "$ref": "#/components/responses/409"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
-        "description": "Book owner or admin. The PDF's text, headings, pictures and outline replace **all** the book's pages and table of contents. Problems with the PDF itself (password protected, unreadable) end the job as `failed`, reported on the WebSocket. A PDF longer than PDF_MAX_PAGES (2000) imports its first 2000 pages. Runs in the background; only one PDF per book at a time (409 while one is processing). Page 1 becomes the book's cover if it looks like one and the book has none; printed contents pages are removed when the PDF has an outline. The finished job's `warnings` say what was left out.",
+        "description": "Book owner or admin. The PDF's text, headings, pictures and outline replace **all** the book's pages and table of contents. Problems with the PDF itself (password protected, unreadable) end the job as `failed`, reported on the WebSocket. A PDF longer than PDF_MAX_PAGES (2000) imports its first 2000 pages. Runs in the background; only one PDF per book at a time (409 while one is processing). Page 1 becomes the book's cover if it looks like one and the book has none; printed contents pages are removed when the PDF has an outline. Limited to 5 uploads per user per hour (429). The finished job's `warnings` say what was left out.",
         "security": [
           {
             "bearerAuth": []
@@ -1270,9 +1287,12 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
-        "description": "Book owner or admin. For adding a picture to a page by hand, or replacing a figure the PDF import got wrong.\n\n1. Call this. 2. POST the image (`file`) plus every entry of `fields` as multipart/form-data to `upload_url` (straight to Cloudinary; JPG, PNG or WebP, resized to fit 1600×1600). 3. Insert `{\"type\":\"image\",\"attrs\":{\"src\": url}}` into the page and save it as usual.\n\nImages live in the book's folder on Cloudinary, so a later PDF import (which replaces every page) removes them too.",
+        "description": "Book owner or admin. For adding a picture to a page by hand, or replacing a figure the PDF import got wrong.\n\n1. Call this. 2. POST the image (`file`) plus every entry of `fields` as multipart/form-data to `upload_url` (straight to Cloudinary; JPG, PNG or WebP, resized to fit 1600×1600). 3. Insert `{\"type\":\"image\",\"attrs\":{\"src\": url}}` into the page and save it as usual.\n\nImages live in the book's folder on Cloudinary, so a later PDF import (which replaces every page) removes them too. Cover and image signatures together are limited to 60 per user per hour (429).",
         "security": [
           {
             "bearerAuth": []
@@ -1563,8 +1583,12 @@
           },
           "404": {
             "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
           }
         },
+        "description": "Limited to 10 per minute per user (429).",
         "security": [
           {
             "bearerAuth": []
@@ -2270,6 +2294,24 @@
       },
       "409": {
         "description": "Conflict (already exists, or a PDF is already processing)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "429": {
+        "description": "Rate limited. Wait the number of seconds in the Retry-After header and try again.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds until another request is allowed"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {

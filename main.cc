@@ -14,6 +14,7 @@
 #include "bootstrap/Bootstrap.hpp"
 #include "utils/Errors.hpp"
 #include "utils/ApiDocs.hpp"
+#include "utils/RateLimit.hpp"
 #include "middleware/JwtMiddleware.hpp"
 #include "middleware/AdminMiddleware.hpp"
 #include "middleware/BookOwnerOrAdminMiddleware.hpp"
@@ -58,6 +59,7 @@ int main() {
     },{Get});
 
     registerApiDocs();   // GET /openapi.json and GET /docs
+    registerUserRateLimit();   // 120 requests a minute per logged-in user (route limits: middleware/RateLimitMiddlewares)
 
     Services* service = getServices(ctx->db, *ctx->settings, ctx->events);
     drogon::app().registerMiddleware(std::make_shared<JwtMiddleWare>(service));
