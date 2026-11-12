@@ -86,15 +86,16 @@ fz_stext_page* loadText(fz_context* ctx, fz_page* page) {
     return text;
 }
 
-// Draws part of a page (or all of it) into an RGB picture, white background.
+// Draws part of a page (or all of it) into a picture, white background. RGB unless `gray`.
 // Drawing the page area rather than copying the embedded image handles every colour
 // space, mask and rotation the PDF might use.
-fz_pixmap* renderArea(fz_context* ctx, fz_page* page, fz_rect area, float zoom) {
+fz_pixmap* renderArea(fz_context* ctx, fz_page* page, fz_rect area, float zoom, bool gray = false) {
     fz_pixmap* volatile pix = nullptr;
     fz_device* volatile dev = nullptr;
     fz_try(ctx) {
         const fz_matrix ctm = fz_scale(zoom, zoom);
-        pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), fz_round_rect(fz_transform_rect(area, ctm)), nullptr, 0);
+        fz_colorspace* colorspace = gray ? fz_device_gray(ctx) : fz_device_rgb(ctx);
+        pix = fz_new_pixmap_with_bbox(ctx, colorspace, fz_round_rect(fz_transform_rect(area, ctm)), nullptr, 0);
         fz_clear_pixmap_with_value(ctx, pix, 255);
         dev = fz_new_draw_device(ctx, fz_identity, pix);   // the zoom goes to fz_run_page only
         fz_run_page(ctx, page, dev, ctm, nullptr);
@@ -222,6 +223,8 @@ struct Block {
     bool        isImage = false;
     fz_rect     rect{};          // position on the page
     std::string imageId;         // public id, once the picture has been rendered
+    bool        isFigure = false;// a drawing found by findFigures, not an embedded picture
+    std::vector<fz_rect> glyphs; // each letter's box, only while looking for figures
 
     std::vector<Run> runs;       // text blocks only
     double sizeSum = 0;
@@ -264,7 +267,7 @@ struct Block {
     }
 };
 
-enum class PageKind { Text, Image, Cover, Skip };
+enum class PageKind { Text, Image, Cover, Skip, Blank };
 
 struct RawPage {
     PageKind kind = PageKind::Text;
@@ -367,6 +370,7 @@ RawPage readPage(fz_context* ctx, fz_stext_page* page, fz_rect bounds, std::map<
 
                 const FontStyle style = styleOf(ctx, ch->font, fonts);
                 block.addChar(c, style.bold, style.italic, ch->size);
+                block.glyphs.push_back(fz_rect_from_quad(ch->quad));
                 sizes[std::lround(ch->size * 2)]++;
                 if (c < 0x80) lineText += static_cast<char>(c >= 'A' && c <= 'Z' ? c + 32 : c);
             }
@@ -565,6 +569,131 @@ std::string toTipTap(const RawPage& page, double bodySize, const PdfImageOptions
 }
 
 // ---------------------------------------------------------------------------
+// Figures: drawings made of lines and shapes. MuPDF reports embedded pictures as image
+// blocks, but a diagram drawn with vector graphics only shows up as its stray label letters
+// ("e:d e:"). So: draw the page small, rub out the text, and whatever ink is left is a drawing.
+// ---------------------------------------------------------------------------
+
+std::vector<fz_rect> findFigures(fz_context* ctx, fz_page* page, const fz_rect& bounds, const std::vector<Block>& blocks) {
+    constexpr float ZOOM   = 0.35f;   // about 25 dpi: enough to see a drawing, cheap to render
+    constexpr int   CELL   = 4;       // pixels per grid cell, about 11 pt
+    constexpr int   DARK   = 160;     // ink; light grey shading behind code listings is lighter than this
+    constexpr int   REACH  = 2;       // cells: parts of one drawing closer than ~23 pt belong together
+
+    Pixmap gray{ctx, renderArea(ctx, page, bounds, ZOOM, true)};
+    const int w = fz_pixmap_width(ctx, gray.pix), h = fz_pixmap_height(ctx, gray.pix);
+    const int ox = fz_pixmap_x(ctx, gray.pix), oy = fz_pixmap_y(ctx, gray.pix);
+    const int stride = static_cast<int>(fz_pixmap_stride(ctx, gray.pix));
+    const unsigned char* pixels = fz_pixmap_samples(ctx, gray.pix);
+    if (w <= 0 || h <= 0) return {};
+
+    std::vector<unsigned char> ink(static_cast<size_t>(w) * h, 0);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) ink[y * w + x] = pixels[y * stride + x] < DARK;
+
+    // Rub out the text, letter by letter (a block's outline can stretch across a drawing whose
+    // labels belong to it), and the pictures that are handled already.
+    const auto erase = [&](const fz_rect& r) {
+        const int x0 = std::max(0, static_cast<int>(std::floor(r.x0 * ZOOM)) - ox - 1);
+        const int y0 = std::max(0, static_cast<int>(std::floor(r.y0 * ZOOM)) - oy - 1);
+        const int x1 = std::min(w, static_cast<int>(std::ceil(r.x1 * ZOOM)) - ox + 1);
+        const int y1 = std::min(h, static_cast<int>(std::ceil(r.y1 * ZOOM)) - oy + 1);
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++) ink[y * w + x] = 0;
+    };
+    for (const auto& block : blocks) {
+        if (block.isImage) erase(block.rect);
+        for (const auto& glyph : block.glyphs) erase(glyph);
+    }
+
+    // Coarse grid: a cell is inked if it has a couple of dark pixels left.
+    const int gw = (w + CELL - 1) / CELL, gh = (h + CELL - 1) / CELL;
+    std::vector<unsigned char> cell(static_cast<size_t>(gw) * gh, 0);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            if (ink[y * w + x] && cell[(y / CELL) * gw + x / CELL] < 255) cell[(y / CELL) * gw + x / CELL]++;
+    for (auto& c : cell) c = c >= 2;
+
+    // Group nearby inked cells into drawings (flood fill, allowing REACH cells of gap).
+    std::vector<int> group(cell.size(), -1);
+    std::vector<fz_rect> figures;
+    const float pageArea = area(bounds);
+    for (int start = 0; start < static_cast<int>(cell.size()); start++) {
+        if (!cell[start] || group[start] != -1) continue;
+        const int id = start;
+        int minX = gw, minY = gh, maxX = -1, maxY = -1, cells = 0;
+        std::vector<int> stack{start};
+        group[start] = id;
+        while (!stack.empty()) {
+            const int c = stack.back(); stack.pop_back();
+            const int cx = c % gw, cy = c / gw;
+            minX = std::min(minX, cx); maxX = std::max(maxX, cx);
+            minY = std::min(minY, cy); maxY = std::max(maxY, cy);
+            cells++;
+            for (int dy = -REACH; dy <= REACH; dy++)
+                for (int dx = -REACH; dx <= REACH; dx++) {
+                    const int nx = cx + dx, ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+                    const int n = ny * gw + nx;
+                    if (cell[n] && group[n] == -1) { group[n] = id; stack.push_back(n); }
+                }
+        }
+
+        const fz_rect r{(ox + minX * CELL) / ZOOM, (oy + minY * CELL) / ZOOM,
+                        (ox + (maxX + 1) * CELL) / ZOOM, (oy + (maxY + 1) * CELL) / ZOOM};
+        // Rules under headings and lines between paragraphs are thin; real figures aren't.
+        if (r.x1 - r.x0 < 60 || r.y1 - r.y0 < 30 || area(r) < pageArea * 0.02f || cells < 6) continue;
+
+        // A frame around a sidebar or a note has ink only along its edges: that's text in a box,
+        // not a figure, so the text inside stays text.
+        int inside = 0;
+        for (int cy = minY + 1; cy < maxY; cy++)
+            for (int cx = minX + 1; cx < maxX; cx++)
+                if (cell[cy * gw + cx]) inside++;
+        if (inside < 3) continue;
+
+        figures.push_back(r);
+    }
+    return figures;
+}
+
+// Puts the figures into the page's blocks: text and pictures that sit inside a figure (its
+// labels) become part of it, and each figure goes where it appears in the reading order.
+void placeFigures(std::vector<Block>& blocks, const std::vector<fz_rect>& figures) {
+    for (fz_rect figure : figures) {
+        const fz_rect grown{figure.x0 - 6, figure.y0 - 6, figure.x1 + 6, figure.y1 + 6};
+        std::vector<Block> kept;
+        for (auto& block : blocks) {
+            const float blockArea = area(block.rect);
+            const bool insideFigure = !block.isFigure && blockArea > 0 &&
+                                      area(fz_intersect_rect(block.rect, grown)) >= blockArea * 0.5f;
+            if (insideFigure) figure = fz_union_rect(figure, block.rect);   // labels sticking out a little
+            else kept.push_back(std::move(block));
+        }
+
+        Block drawing;
+        drawing.isImage = true;
+        drawing.isFigure = true;
+        drawing.rect = figure;
+        auto at = std::find_if(kept.begin(), kept.end(), [&](const Block& b) { return b.rect.y0 >= figure.y0 - 1; });
+        kept.insert(at, std::move(drawing));
+        blocks = std::move(kept);
+    }
+}
+
+bool isBlankPage(const RawPage& page) {
+    if (page.blocks.empty()) return true;
+    if (page.blocks.size() > 2) return false;
+    for (const auto& block : page.blocks) {
+        if (block.isImage) return false;
+        std::string lower = block.text();
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (lower.find("intentionally left blank") == std::string::npos && lower.find("intentionally blank") == std::string::npos) return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Images
 // ---------------------------------------------------------------------------
 
@@ -664,12 +793,15 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
                 current.kind = PageKind::Text;   // out of image budget: keep whatever text it has
             }
         } else if (current.kind == PageKind::Text) {
+            placeFigures(current.blocks, findFigures(mu.ctx, page.page, bounds, current.blocks));
+            for (auto& block : current.blocks) std::vector<fz_rect>().swap(block.glyphs);   // not needed any more
+
             int n = 0;
             for (auto& block : current.blocks) {
                 if (!block.isImage) continue;
                 const float w = block.rect.x1 - block.rect.x0, h = block.rect.y1 - block.rect.y0;
-                // Skip bullets, icons, rules and other decorations.
-                if (w < 40 || h < 40 || area(block.rect) < area(bounds) * 0.01f) continue;
+                // Skip bullets, icons, rules and other decorations (figures are big enough already).
+                if (!block.isFigure && (w < 40 || h < 40 || area(block.rect) < area(bounds) * 0.01f)) continue;
                 if (!budget.allows()) { budget.refuse(); continue; }
 
                 const float zoom = std::min(2.0f, IMAGE_SIDE_PX / std::max(w, h));
@@ -688,6 +820,11 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
 
     removeRunningHeaders(raw);
 
+    // Pages with nothing left on them: blank in the printed book, or only a header and a page number.
+    for (auto& page : raw) {
+        if (page.kind == PageKind::Text && isBlankPage(page)) page.kind = PageKind::Blank;
+    }
+
     // Pass 2: the body text size is known now, so build each page's TipTap document.
     double bodySize = 0;
     size_t most = 0;
@@ -695,12 +832,14 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
         if (count > most) { most = count; bodySize = halfPoints / 2.0; }
     }
 
-    // Dropped pages (cover, printed contents) shift the rest up: PDF page -> book page.
+    // Dropped pages (cover, printed contents, blank pages) shift the rest up: PDF page -> book page.
     std::vector<int> bookPage(pageCount, 0);
     int next = 0;
+    int blankPages = 0;
     for (int i = 0; i < pageCount; i++) {
-        if (raw[i].kind == PageKind::Cover || raw[i].kind == PageKind::Skip) {
-            if (raw[i].kind == PageKind::Skip) result.skippedPages++;
+        if (raw[i].kind == PageKind::Cover || raw[i].kind == PageKind::Skip || raw[i].kind == PageKind::Blank) {
+            if (raw[i].kind == PageKind::Skip)  result.skippedPages++;
+            if (raw[i].kind == PageKind::Blank) blankPages++;
             continue;
         }
         bookPage[i] = ++next;
@@ -719,6 +858,9 @@ ExtractedPdf extractPdf(const std::string& path, const PdfLimits& limits, const 
         result.warnings.push_back(std::to_string(budget.refused()) + " picture" + (budget.refused() == 1 ? " was" : "s were") +
             " left out: " + (budget.outOfBytes() ? "the book's pictures reached the 80 MB limit"
                                                  : "the limit is " + std::to_string(limits.maxImages) + " per book"));
+    }
+    if (blankPages > 0) {
+        result.warnings.push_back(std::to_string(blankPages) + " blank page" + (blankPages == 1 ? " was" : "s were") + " removed");
     }
     if (result.skippedPages > 0) {
         result.warnings.push_back(std::to_string(result.skippedPages) + " printed table of contents page" +
