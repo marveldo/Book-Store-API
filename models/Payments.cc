@@ -31,6 +31,22 @@ const std::string Payments::Cols::_order_id = "\"order_id\"";
 
 const std::string Payments::Cols::_amount = "\"amount\"";
 
+const std::string Payments::Cols::_reference = "\"reference\"";
+
+const std::string Payments::Cols::_checkout_url = "\"checkout_url\"";
+
+const std::string Payments::Cols::_status = "\"status\"";
+
+const std::string Payments::Cols::_currency = "\"currency\"";
+
+const std::string Payments::Cols::_created_at = "\"created_at\"";
+
+const std::string Payments::Cols::_paid_at = "\"paid_at\"";
+
+const std::string Payments::Cols::_next_check_at = "\"next_check_at\"";
+
+const std::string Payments::Cols::_check_count = "\"check_count\"";
+
 
 const std::string Payments::primaryKeyName = "id";
 
@@ -43,7 +59,15 @@ const std::vector<typename Payments::MetaData> Payments::metaData_={
 {"id","std::string","uuid",0,0,1,1},
 {"user_id","std::string","uuid",0,0,0,1},
 {"order_id","std::string","uuid",0,0,0,1},
-{"amount","int64_t","bigint",8,0,0,1}
+{"amount","int64_t","bigint",8,0,0,1},
+{"reference","std::string","text",0,0,0,0},
+{"checkout_url","std::string","text",0,0,0,0},
+{"status","std::string","text",0,0,0,1},
+{"currency","std::string","text",0,0,0,1},
+{"created_at","::trantor::Date","timestamp with time zone",0,0,0,1},
+{"paid_at","::trantor::Date","timestamp with time zone",0,0,0,0},
+{"next_check_at","::trantor::Date","timestamp with time zone",0,0,0,0},
+{"check_count","int32_t","integer",4,0,0,1}
 
 };
 const std::string &Payments::getColumnName(size_t index) noexcept(false)
@@ -84,11 +108,118 @@ Payments::Payments(const Row &r, const ssize_t indexOffset) noexcept
 
         }
 
+        if(!r["reference"].isNull())
+        {
+
+            reference_=std::make_shared<std::string>(r["reference"].as<std::string>());
+
+        }
+
+        if(!r["checkout_url"].isNull())
+        {
+
+            checkoutUrl_=std::make_shared<std::string>(r["checkout_url"].as<std::string>());
+
+        }
+
+        if(!r["status"].isNull())
+        {
+
+            status_=std::make_shared<std::string>(r["status"].as<std::string>());
+
+        }
+
+        if(!r["currency"].isNull())
+        {
+
+            currency_=std::make_shared<std::string>(r["currency"].as<std::string>());
+
+        }
+
+        if(!r["created_at"].isNull())
+        {
+            auto timeStr = r["created_at"].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        if(!r["paid_at"].isNull())
+        {
+            auto timeStr = r["paid_at"].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        if(!r["next_check_at"].isNull())
+        {
+            auto timeStr = r["next_check_at"].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        if(!r["check_count"].isNull())
+        {
+
+            checkCount_=std::make_shared<int32_t>(r["check_count"].as<int32_t>());
+
+        }
+
     }
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 4 > r.size())
+        if(offset + 12 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -127,13 +258,128 @@ Payments::Payments(const Row &r, const ssize_t indexOffset) noexcept
 
         }
 
+        index = offset + 4;
+        if(!r[index].isNull())
+        {
+
+            reference_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
+        index = offset + 5;
+        if(!r[index].isNull())
+        {
+
+            checkoutUrl_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
+        index = offset + 6;
+        if(!r[index].isNull())
+        {
+
+            status_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
+        index = offset + 7;
+        if(!r[index].isNull())
+        {
+
+            currency_=std::make_shared<std::string>(r[index].as<std::string>());
+
+        }
+
+        index = offset + 8;
+        if(!r[index].isNull())
+        {
+            auto timeStr = r[index].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        index = offset + 9;
+        if(!r[index].isNull())
+        {
+            auto timeStr = r[index].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        index = offset + 10;
+        if(!r[index].isNull())
+        {
+            auto timeStr = r[index].as<std::string>();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+
+        index = offset + 11;
+        if(!r[index].isNull())
+        {
+
+            checkCount_=std::make_shared<int32_t>(r[index].as<int32_t>());
+
+        }
+
     }
 
 }
 
 Payments::Payments(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 4)
+    if(pMasqueradingVector.size() != 12)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -172,6 +418,135 @@ Payments::Payments(const Json::Value &pJson, const std::vector<std::string> &pMa
         if(!pJson[pMasqueradingVector[3]].isNull())
         {
             amount_=std::make_shared<int64_t>((int64_t)pJson[pMasqueradingVector[3]].asInt64());
+        }
+    }
+
+    if(!pMasqueradingVector[4].empty() && pJson.isMember(pMasqueradingVector[4]))
+    {
+        dirtyFlag_[4] = true;
+        if(!pJson[pMasqueradingVector[4]].isNull())
+        {
+            reference_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[5].empty() && pJson.isMember(pMasqueradingVector[5]))
+    {
+        dirtyFlag_[5] = true;
+        if(!pJson[pMasqueradingVector[5]].isNull())
+        {
+            checkoutUrl_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
+    {
+        dirtyFlag_[6] = true;
+        if(!pJson[pMasqueradingVector[6]].isNull())
+        {
+            status_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson[pMasqueradingVector[7]].isNull())
+        {
+            currency_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson[pMasqueradingVector[8]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[8]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson[pMasqueradingVector[11]].isNull())
+        {
+            checkCount_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[11]].asInt64());
         }
     }
 
@@ -216,12 +591,141 @@ Payments::Payments(const Json::Value &pJson) noexcept(false)
         }
     }
 
+    if(pJson.isMember("reference"))
+    {
+        dirtyFlag_[4]=true;
+        if(!pJson["reference"].isNull())
+        {
+            reference_=std::make_shared<std::string>(pJson["reference"].asString());
+        }
+    }
+
+    if(pJson.isMember("checkout_url"))
+    {
+        dirtyFlag_[5]=true;
+        if(!pJson["checkout_url"].isNull())
+        {
+            checkoutUrl_=std::make_shared<std::string>(pJson["checkout_url"].asString());
+        }
+    }
+
+    if(pJson.isMember("status"))
+    {
+        dirtyFlag_[6]=true;
+        if(!pJson["status"].isNull())
+        {
+            status_=std::make_shared<std::string>(pJson["status"].asString());
+        }
+    }
+
+    if(pJson.isMember("currency"))
+    {
+        dirtyFlag_[7]=true;
+        if(!pJson["currency"].isNull())
+        {
+            currency_=std::make_shared<std::string>(pJson["currency"].asString());
+        }
+    }
+
+    if(pJson.isMember("created_at"))
+    {
+        dirtyFlag_[8]=true;
+        if(!pJson["created_at"].isNull())
+        {
+            auto timeStr = pJson["created_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("paid_at"))
+    {
+        dirtyFlag_[9]=true;
+        if(!pJson["paid_at"].isNull())
+        {
+            auto timeStr = pJson["paid_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("next_check_at"))
+    {
+        dirtyFlag_[10]=true;
+        if(!pJson["next_check_at"].isNull())
+        {
+            auto timeStr = pJson["next_check_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("check_count"))
+    {
+        dirtyFlag_[11]=true;
+        if(!pJson["check_count"].isNull())
+        {
+            checkCount_=std::make_shared<int32_t>((int32_t)pJson["check_count"].asInt64());
+        }
+    }
+
 }
 
 void Payments::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 4)
+    if(pMasqueradingVector.size() != 12)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -262,6 +766,135 @@ void Payments::updateByMasqueradedJson(const Json::Value &pJson,
         }
     }
 
+    if(!pMasqueradingVector[4].empty() && pJson.isMember(pMasqueradingVector[4]))
+    {
+        dirtyFlag_[4] = true;
+        if(!pJson[pMasqueradingVector[4]].isNull())
+        {
+            reference_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[5].empty() && pJson.isMember(pMasqueradingVector[5]))
+    {
+        dirtyFlag_[5] = true;
+        if(!pJson[pMasqueradingVector[5]].isNull())
+        {
+            checkoutUrl_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
+    {
+        dirtyFlag_[6] = true;
+        if(!pJson[pMasqueradingVector[6]].isNull())
+        {
+            status_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson[pMasqueradingVector[7]].isNull())
+        {
+            currency_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
+        }
+    }
+
+    if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson[pMasqueradingVector[8]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[8]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson[pMasqueradingVector[11]].isNull())
+        {
+            checkCount_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[11]].asInt64());
+        }
+    }
+
 }
 
 void Payments::updateByJson(const Json::Value &pJson) noexcept(false)
@@ -299,6 +932,135 @@ void Payments::updateByJson(const Json::Value &pJson) noexcept(false)
         if(!pJson["amount"].isNull())
         {
             amount_=std::make_shared<int64_t>((int64_t)pJson["amount"].asInt64());
+        }
+    }
+
+    if(pJson.isMember("reference"))
+    {
+        dirtyFlag_[4] = true;
+        if(!pJson["reference"].isNull())
+        {
+            reference_=std::make_shared<std::string>(pJson["reference"].asString());
+        }
+    }
+
+    if(pJson.isMember("checkout_url"))
+    {
+        dirtyFlag_[5] = true;
+        if(!pJson["checkout_url"].isNull())
+        {
+            checkoutUrl_=std::make_shared<std::string>(pJson["checkout_url"].asString());
+        }
+    }
+
+    if(pJson.isMember("status"))
+    {
+        dirtyFlag_[6] = true;
+        if(!pJson["status"].isNull())
+        {
+            status_=std::make_shared<std::string>(pJson["status"].asString());
+        }
+    }
+
+    if(pJson.isMember("currency"))
+    {
+        dirtyFlag_[7] = true;
+        if(!pJson["currency"].isNull())
+        {
+            currency_=std::make_shared<std::string>(pJson["currency"].asString());
+        }
+    }
+
+    if(pJson.isMember("created_at"))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson["created_at"].isNull())
+        {
+            auto timeStr = pJson["created_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("paid_at"))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson["paid_at"].isNull())
+        {
+            auto timeStr = pJson["paid_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                paidAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("next_check_at"))
+    {
+        dirtyFlag_[10] = true;
+        if(!pJson["next_check_at"].isNull())
+        {
+            auto timeStr = pJson["next_check_at"].asString();
+            struct tm stm;
+            memset(&stm,0,sizeof(stm));
+            stm.tm_isdst = -1;
+            auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
+            time_t t = mktime(&stm);
+            size_t decimalNum = 0;
+            if(p)
+            {
+                if(*p=='.')
+                {
+                    std::string decimals(p+1,&timeStr[timeStr.length()]);
+                    while(decimals.length()<6)
+                    {
+                        decimals += "0";
+                    }
+                    decimalNum = (size_t)atol(decimals.c_str());
+                }
+                nextCheckAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
+            }
+        }
+    }
+
+    if(pJson.isMember("check_count"))
+    {
+        dirtyFlag_[11] = true;
+        if(!pJson["check_count"].isNull())
+        {
+            checkCount_=std::make_shared<int32_t>((int32_t)pJson["check_count"].asInt64());
         }
     }
 
@@ -392,6 +1154,182 @@ void Payments::setAmount(const int64_t &pAmount) noexcept
     dirtyFlag_[3] = true;
 }
 
+const std::string &Payments::getValueOfReference() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(reference_)
+        return *reference_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Payments::getReference() const noexcept
+{
+    return reference_;
+}
+void Payments::setReference(const std::string &pReference) noexcept
+{
+    reference_ = std::make_shared<std::string>(pReference);
+    dirtyFlag_[4] = true;
+}
+void Payments::setReference(std::string &&pReference) noexcept
+{
+    reference_ = std::make_shared<std::string>(std::move(pReference));
+    dirtyFlag_[4] = true;
+}
+void Payments::setReferenceToNull() noexcept
+{
+    reference_.reset();
+    dirtyFlag_[4] = true;
+}
+
+const std::string &Payments::getValueOfCheckoutUrl() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(checkoutUrl_)
+        return *checkoutUrl_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Payments::getCheckoutUrl() const noexcept
+{
+    return checkoutUrl_;
+}
+void Payments::setCheckoutUrl(const std::string &pCheckoutUrl) noexcept
+{
+    checkoutUrl_ = std::make_shared<std::string>(pCheckoutUrl);
+    dirtyFlag_[5] = true;
+}
+void Payments::setCheckoutUrl(std::string &&pCheckoutUrl) noexcept
+{
+    checkoutUrl_ = std::make_shared<std::string>(std::move(pCheckoutUrl));
+    dirtyFlag_[5] = true;
+}
+void Payments::setCheckoutUrlToNull() noexcept
+{
+    checkoutUrl_.reset();
+    dirtyFlag_[5] = true;
+}
+
+const std::string &Payments::getValueOfStatus() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(status_)
+        return *status_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Payments::getStatus() const noexcept
+{
+    return status_;
+}
+void Payments::setStatus(const std::string &pStatus) noexcept
+{
+    status_ = std::make_shared<std::string>(pStatus);
+    dirtyFlag_[6] = true;
+}
+void Payments::setStatus(std::string &&pStatus) noexcept
+{
+    status_ = std::make_shared<std::string>(std::move(pStatus));
+    dirtyFlag_[6] = true;
+}
+
+const std::string &Payments::getValueOfCurrency() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(currency_)
+        return *currency_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &Payments::getCurrency() const noexcept
+{
+    return currency_;
+}
+void Payments::setCurrency(const std::string &pCurrency) noexcept
+{
+    currency_ = std::make_shared<std::string>(pCurrency);
+    dirtyFlag_[7] = true;
+}
+void Payments::setCurrency(std::string &&pCurrency) noexcept
+{
+    currency_ = std::make_shared<std::string>(std::move(pCurrency));
+    dirtyFlag_[7] = true;
+}
+
+const ::trantor::Date &Payments::getValueOfCreatedAt() const noexcept
+{
+    static const ::trantor::Date defaultValue = ::trantor::Date();
+    if(createdAt_)
+        return *createdAt_;
+    return defaultValue;
+}
+const std::shared_ptr<::trantor::Date> &Payments::getCreatedAt() const noexcept
+{
+    return createdAt_;
+}
+void Payments::setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept
+{
+    createdAt_ = std::make_shared<::trantor::Date>(pCreatedAt);
+    dirtyFlag_[8] = true;
+}
+
+const ::trantor::Date &Payments::getValueOfPaidAt() const noexcept
+{
+    static const ::trantor::Date defaultValue = ::trantor::Date();
+    if(paidAt_)
+        return *paidAt_;
+    return defaultValue;
+}
+const std::shared_ptr<::trantor::Date> &Payments::getPaidAt() const noexcept
+{
+    return paidAt_;
+}
+void Payments::setPaidAt(const ::trantor::Date &pPaidAt) noexcept
+{
+    paidAt_ = std::make_shared<::trantor::Date>(pPaidAt);
+    dirtyFlag_[9] = true;
+}
+void Payments::setPaidAtToNull() noexcept
+{
+    paidAt_.reset();
+    dirtyFlag_[9] = true;
+}
+
+const ::trantor::Date &Payments::getValueOfNextCheckAt() const noexcept
+{
+    static const ::trantor::Date defaultValue = ::trantor::Date();
+    if(nextCheckAt_)
+        return *nextCheckAt_;
+    return defaultValue;
+}
+const std::shared_ptr<::trantor::Date> &Payments::getNextCheckAt() const noexcept
+{
+    return nextCheckAt_;
+}
+void Payments::setNextCheckAt(const ::trantor::Date &pNextCheckAt) noexcept
+{
+    nextCheckAt_ = std::make_shared<::trantor::Date>(pNextCheckAt);
+    dirtyFlag_[10] = true;
+}
+void Payments::setNextCheckAtToNull() noexcept
+{
+    nextCheckAt_.reset();
+    dirtyFlag_[10] = true;
+}
+
+const int32_t &Payments::getValueOfCheckCount() const noexcept
+{
+    static const int32_t defaultValue = int32_t();
+    if(checkCount_)
+        return *checkCount_;
+    return defaultValue;
+}
+const std::shared_ptr<int32_t> &Payments::getCheckCount() const noexcept
+{
+    return checkCount_;
+}
+void Payments::setCheckCount(const int32_t &pCheckCount) noexcept
+{
+    checkCount_ = std::make_shared<int32_t>(pCheckCount);
+    dirtyFlag_[11] = true;
+}
+
 void Payments::updateId(const uint64_t id)
 {
 }
@@ -403,7 +1341,15 @@ const std::vector<std::string> &Payments::insertColumns() noexcept
         "id",
         "user_id",
         "order_id",
-        "amount"
+        "amount",
+        "reference",
+        "checkout_url",
+        "status",
+        "currency",
+        "created_at",
+        "paid_at",
+        "next_check_at",
+        "check_count"
 
     };
     return inCols;
@@ -460,6 +1406,102 @@ void Payments::outputArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[4])
+    {
+        if(getReference())
+        {
+            binder << getValueOfReference();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[5])
+    {
+        if(getCheckoutUrl())
+        {
+            binder << getValueOfCheckoutUrl();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[6])
+    {
+        if(getStatus())
+        {
+            binder << getValueOfStatus();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[7])
+    {
+        if(getCurrency())
+        {
+            binder << getValueOfCurrency();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[8])
+    {
+        if(getCreatedAt())
+        {
+            binder << getValueOfCreatedAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[9])
+    {
+        if(getPaidAt())
+        {
+            binder << getValueOfPaidAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[10])
+    {
+        if(getNextCheckAt())
+        {
+            binder << getValueOfNextCheckAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[11])
+    {
+        if(getCheckCount())
+        {
+            binder << getValueOfCheckCount();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 
 const std::vector<std::string> Payments::updateColumns() const
@@ -484,6 +1526,46 @@ const std::vector<std::string> Payments::updateColumns() const
     if(dirtyFlag_[3])
     {
         ret.push_back(getColumnName(3));
+    }
+
+    if(dirtyFlag_[4])
+    {
+        ret.push_back(getColumnName(4));
+    }
+
+    if(dirtyFlag_[5])
+    {
+        ret.push_back(getColumnName(5));
+    }
+
+    if(dirtyFlag_[6])
+    {
+        ret.push_back(getColumnName(6));
+    }
+
+    if(dirtyFlag_[7])
+    {
+        ret.push_back(getColumnName(7));
+    }
+
+    if(dirtyFlag_[8])
+    {
+        ret.push_back(getColumnName(8));
+    }
+
+    if(dirtyFlag_[9])
+    {
+        ret.push_back(getColumnName(9));
+    }
+
+    if(dirtyFlag_[10])
+    {
+        ret.push_back(getColumnName(10));
+    }
+
+    if(dirtyFlag_[11])
+    {
+        ret.push_back(getColumnName(11));
     }
 
     return ret;
@@ -540,6 +1622,102 @@ void Payments::updateArgs(drogon::orm::internal::SqlBinder &binder) const
         }
     }
 
+    if(dirtyFlag_[4])
+    {
+        if(getReference())
+        {
+            binder << getValueOfReference();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[5])
+    {
+        if(getCheckoutUrl())
+        {
+            binder << getValueOfCheckoutUrl();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[6])
+    {
+        if(getStatus())
+        {
+            binder << getValueOfStatus();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[7])
+    {
+        if(getCurrency())
+        {
+            binder << getValueOfCurrency();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[8])
+    {
+        if(getCreatedAt())
+        {
+            binder << getValueOfCreatedAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[9])
+    {
+        if(getPaidAt())
+        {
+            binder << getValueOfPaidAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[10])
+    {
+        if(getNextCheckAt())
+        {
+            binder << getValueOfNextCheckAt();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
+    if(dirtyFlag_[11])
+    {
+        if(getCheckCount())
+        {
+            binder << getValueOfCheckCount();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+
 }
 Json::Value Payments::toJson() const
 {
@@ -589,6 +1767,94 @@ Json::Value Payments::toJson() const
         ret["amount"]=Json::Value();
     }
 
+    if(getReference())
+    {
+
+        ret["reference"]=getValueOfReference();
+
+    }
+    else
+    {
+        ret["reference"]=Json::Value();
+    }
+
+    if(getCheckoutUrl())
+    {
+
+        ret["checkout_url"]=getValueOfCheckoutUrl();
+
+    }
+    else
+    {
+        ret["checkout_url"]=Json::Value();
+    }
+
+    if(getStatus())
+    {
+
+        ret["status"]=getValueOfStatus();
+
+    }
+    else
+    {
+        ret["status"]=Json::Value();
+    }
+
+    if(getCurrency())
+    {
+
+        ret["currency"]=getValueOfCurrency();
+
+    }
+    else
+    {
+        ret["currency"]=Json::Value();
+    }
+
+    if(getCreatedAt())
+    {
+
+        ret["created_at"]=getCreatedAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["created_at"]=Json::Value();
+    }
+
+    if(getPaidAt())
+    {
+
+        ret["paid_at"]=getPaidAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["paid_at"]=Json::Value();
+    }
+
+    if(getNextCheckAt())
+    {
+
+        ret["next_check_at"]=getNextCheckAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["next_check_at"]=Json::Value();
+    }
+
+    if(getCheckCount())
+    {
+
+        ret["check_count"]=getValueOfCheckCount();
+
+    }
+    else
+    {
+        ret["check_count"]=Json::Value();
+    }
+
     return ret;
 }
 
@@ -601,7 +1867,7 @@ Json::Value Payments::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 4)
+    if(pMasqueradingVector.size() == 12)
     {
 
         if(!pMasqueradingVector[0].empty())
@@ -660,6 +1926,118 @@ Json::Value Payments::toMasqueradedJson(
             }
         }
 
+        if(!pMasqueradingVector[4].empty())
+        {
+            if(getReference())
+            {
+
+                ret[pMasqueradingVector[4]]=getValueOfReference();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[4]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[5].empty())
+        {
+            if(getCheckoutUrl())
+            {
+
+                ret[pMasqueradingVector[5]]=getValueOfCheckoutUrl();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[5]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[6].empty())
+        {
+            if(getStatus())
+            {
+
+                ret[pMasqueradingVector[6]]=getValueOfStatus();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[6]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[7].empty())
+        {
+            if(getCurrency())
+            {
+
+                ret[pMasqueradingVector[7]]=getValueOfCurrency();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[7]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[8].empty())
+        {
+            if(getCreatedAt())
+            {
+
+                ret[pMasqueradingVector[8]]=getCreatedAt()->toDbStringLocal();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[8]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[9].empty())
+        {
+            if(getPaidAt())
+            {
+
+                ret[pMasqueradingVector[9]]=getPaidAt()->toDbStringLocal();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[9]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[10].empty())
+        {
+            if(getNextCheckAt())
+            {
+
+                ret[pMasqueradingVector[10]]=getNextCheckAt()->toDbStringLocal();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[10]]=Json::Value();
+            }
+        }
+
+        if(!pMasqueradingVector[11].empty())
+        {
+            if(getCheckCount())
+            {
+
+                ret[pMasqueradingVector[11]]=getValueOfCheckCount();
+
+            }
+            else
+            {
+                ret[pMasqueradingVector[11]]=Json::Value();
+            }
+        }
+
         return ret;
     }
     LOG_ERROR << "Masquerade failed";
@@ -706,6 +2084,94 @@ Json::Value Payments::toMasqueradedJson(
     else
     {
         ret["amount"]=Json::Value();
+    }
+
+    if(getReference())
+    {
+
+        ret["reference"]=getValueOfReference();
+
+    }
+    else
+    {
+        ret["reference"]=Json::Value();
+    }
+
+    if(getCheckoutUrl())
+    {
+
+        ret["checkout_url"]=getValueOfCheckoutUrl();
+
+    }
+    else
+    {
+        ret["checkout_url"]=Json::Value();
+    }
+
+    if(getStatus())
+    {
+
+        ret["status"]=getValueOfStatus();
+
+    }
+    else
+    {
+        ret["status"]=Json::Value();
+    }
+
+    if(getCurrency())
+    {
+
+        ret["currency"]=getValueOfCurrency();
+
+    }
+    else
+    {
+        ret["currency"]=Json::Value();
+    }
+
+    if(getCreatedAt())
+    {
+
+        ret["created_at"]=getCreatedAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["created_at"]=Json::Value();
+    }
+
+    if(getPaidAt())
+    {
+
+        ret["paid_at"]=getPaidAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["paid_at"]=Json::Value();
+    }
+
+    if(getNextCheckAt())
+    {
+
+        ret["next_check_at"]=getNextCheckAt()->toDbStringLocal();
+
+    }
+    else
+    {
+        ret["next_check_at"]=Json::Value();
+    }
+
+    if(getCheckCount())
+    {
+
+        ret["check_count"]=getValueOfCheckCount();
+
+    }
+    else
+    {
+        ret["check_count"]=Json::Value();
     }
 
     return ret;
@@ -756,13 +2222,61 @@ bool Payments::validateJsonForCreation(const Json::Value &pJson, std::string &er
         return false;
     }
 
+    if(pJson.isMember("reference"))
+    {
+        if(!validJsonOfField(4, "reference", pJson["reference"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("checkout_url"))
+    {
+        if(!validJsonOfField(5, "checkout_url", pJson["checkout_url"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("status"))
+    {
+        if(!validJsonOfField(6, "status", pJson["status"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("currency"))
+    {
+        if(!validJsonOfField(7, "currency", pJson["currency"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("created_at"))
+    {
+        if(!validJsonOfField(8, "created_at", pJson["created_at"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("paid_at"))
+    {
+        if(!validJsonOfField(9, "paid_at", pJson["paid_at"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("next_check_at"))
+    {
+        if(!validJsonOfField(10, "next_check_at", pJson["next_check_at"], err, true))
+            return false;
+    }
+
+    if(pJson.isMember("check_count"))
+    {
+        if(!validJsonOfField(11, "check_count", pJson["check_count"], err, true))
+            return false;
+    }
+
     return true;
 }
 bool Payments::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                   const std::vector<std::string> &pMasqueradingVector,
                                                   std::string &err)
 {
-    if(pMasqueradingVector.size() != 4)
+    if(pMasqueradingVector.size() != 12)
     {
         err = "Bad masquerading vector";
         return false;
@@ -827,6 +2341,86 @@ bool Payments::validateMasqueradedJsonForCreation(const Json::Value &pJson,
 
       }
 
+      if(!pMasqueradingVector[4].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[4]))
+          {
+              if(!validJsonOfField(4, pMasqueradingVector[4], pJson[pMasqueradingVector[4]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[5].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[5]))
+          {
+              if(!validJsonOfField(5, pMasqueradingVector[5], pJson[pMasqueradingVector[5]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[6].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[6]))
+          {
+              if(!validJsonOfField(6, pMasqueradingVector[6], pJson[pMasqueradingVector[6]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[7].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[7]))
+          {
+              if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[8].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[8]))
+          {
+              if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[9].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[9]))
+          {
+              if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[10].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[10]))
+          {
+              if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, true))
+                  return false;
+          }
+
+      }
+
+      if(!pMasqueradingVector[11].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[11]))
+          {
+              if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, true))
+                  return false;
+          }
+
+      }
+
     }
     catch(const Json::LogicError &e)
     {
@@ -868,13 +2462,61 @@ bool Payments::validateJsonForUpdate(const Json::Value &pJson, std::string &err)
             return false;
     }
 
+    if(pJson.isMember("reference"))
+    {
+        if(!validJsonOfField(4, "reference", pJson["reference"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("checkout_url"))
+    {
+        if(!validJsonOfField(5, "checkout_url", pJson["checkout_url"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("status"))
+    {
+        if(!validJsonOfField(6, "status", pJson["status"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("currency"))
+    {
+        if(!validJsonOfField(7, "currency", pJson["currency"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("created_at"))
+    {
+        if(!validJsonOfField(8, "created_at", pJson["created_at"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("paid_at"))
+    {
+        if(!validJsonOfField(9, "paid_at", pJson["paid_at"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("next_check_at"))
+    {
+        if(!validJsonOfField(10, "next_check_at", pJson["next_check_at"], err, false))
+            return false;
+    }
+
+    if(pJson.isMember("check_count"))
+    {
+        if(!validJsonOfField(11, "check_count", pJson["check_count"], err, false))
+            return false;
+    }
+
     return true;
 }
 bool Payments::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                 const std::vector<std::string> &pMasqueradingVector,
                                                 std::string &err)
 {
-    if(pMasqueradingVector.size() != 4)
+    if(pMasqueradingVector.size() != 12)
     {
         err = "Bad masquerading vector";
         return false;
@@ -908,6 +2550,54 @@ bool Payments::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[3].empty() && pJson.isMember(pMasqueradingVector[3]))
       {
           if(!validJsonOfField(3, pMasqueradingVector[3], pJson[pMasqueradingVector[3]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[4].empty() && pJson.isMember(pMasqueradingVector[4]))
+      {
+          if(!validJsonOfField(4, pMasqueradingVector[4], pJson[pMasqueradingVector[4]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[5].empty() && pJson.isMember(pMasqueradingVector[5]))
+      {
+          if(!validJsonOfField(5, pMasqueradingVector[5], pJson[pMasqueradingVector[5]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
+      {
+          if(!validJsonOfField(6, pMasqueradingVector[6], pJson[pMasqueradingVector[6]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
+      {
+          if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
+      {
+          if(!validJsonOfField(8, pMasqueradingVector[8], pJson[pMasqueradingVector[8]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+      {
+          if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+      {
+          if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, false))
+              return false;
+      }
+
+      if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
+      {
+          if(!validJsonOfField(11, pMasqueradingVector[11], pJson[pMasqueradingVector[11]], err, false))
               return false;
       }
 
@@ -985,6 +2675,130 @@ bool Payments::validJsonOfField(size_t index,
             }
 
             if(!pJson.isInt64())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 4:
+
+            if(pJson.isNull())
+            {
+                return true;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 5:
+
+            if(pJson.isNull())
+            {
+                return true;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 6:
+
+            if(pJson.isNull())
+            {
+                err="The " + fieldName + " column cannot be null";
+                return false;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 7:
+
+            if(pJson.isNull())
+            {
+                err="The " + fieldName + " column cannot be null";
+                return false;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 8:
+
+            if(pJson.isNull())
+            {
+                err="The " + fieldName + " column cannot be null";
+                return false;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 9:
+
+            if(pJson.isNull())
+            {
+                return true;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 10:
+
+            if(pJson.isNull())
+            {
+                return true;
+            }
+
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+
+            break;
+
+        case 11:
+
+            if(pJson.isNull())
+            {
+                err="The " + fieldName + " column cannot be null";
+                return false;
+            }
+
+            if(!pJson.isInt())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

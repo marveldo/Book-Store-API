@@ -24,5 +24,8 @@ inline Json::Value orderJson(const drogon_model::bookstore::Orders& order) {
 inline Json::Value paymentJson(const drogon_model::bookstore::Payments& payment) {
     Json::Value json = payment.toJson();
     json["amount"] = money::toMajor(payment.getValueOfAmount());
+    json.removeMember("next_check_at");
+    json.removeMember("check_count");
+    if (payment.getValueOfStatus() != "pending") json["checkout_url"] = Json::nullValue;
     return json;
 }

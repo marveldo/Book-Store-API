@@ -59,6 +59,7 @@ AppContext* bootstrap() {
                                    redis.username, redis.db);
         // PDF imports get their own lane (Redis list "tasks:pdf") so they never hold up emails.
         ctx->queue->addLane("pdf", ctx->settings->uploads.pdfMaxConcurrent);
+        ctx->queue->addLane("payments", 2);
 
         const EmailSettings& email = ctx->settings->email;
         ctx->email = new EmailService(email.resendApiKey, email.from, email.templatesDir, email.appUrl, email.assetsUrl, ctx->queue->loop(), redis.maxInFlight);
@@ -67,6 +68,10 @@ AppContext* bootstrap() {
         RegisterEvents(ctx->events, ctx->queue);
         removeStalePdfs();
         ctx->queue->start();
+
+        ctx->scheduler = new Scheduler(ctx->queue, redis.host, redis.port, redis.password, redis.username, redis.db);
+        ctx->scheduler->every("reconcile_payments", std::chrono::minutes(10));
+        ctx->scheduler->start();
     } catch (...) {
         delete ctx;
         throw;

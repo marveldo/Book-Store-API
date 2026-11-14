@@ -4,3 +4,4 @@
 #include "services/Services.hpp"
 
 void registerTaskHandlers(TaskQueue* queue, EmailService* email, Services* services);
+void registerPaymentTasks(TaskQueue* queue, Services* services);

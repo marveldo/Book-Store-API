@@ -53,6 +53,16 @@ struct UploadSettings {
     int    pdfMaxConcurrent;   // PDF imports running at once on each server
 };
 
+struct PaymentSettings {
+    std::string paystackSecretKey;
+    std::string paystackApiUrl;        // https://api.paystack.co unless overridden (e.g. a mock in tests)
+    int         maxChecks;             // poller checks of a pending payment before it is abandoned
+};
+
+struct CronSettings {
+    std::string secret;                // X-Cron-Secret for POST /internal/cron/{task}; empty turns the route off
+};
+
 struct Settings {
     int              port;
     int              threads;
@@ -64,6 +74,8 @@ struct Settings {
     EmailSettings    email;
     CloudinarySettings cloudinary;
     UploadSettings   uploads;
+    PaymentSettings  payments;
+    CronSettings     cron;
 
     bool isProduction() const { return environment == "production"; }
 };

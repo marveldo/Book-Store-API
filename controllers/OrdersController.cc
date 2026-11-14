@@ -1,6 +1,7 @@
 #include "OrdersController.h"
 #include "utils/MoneyJson.hpp"
 #include "input/OrderInputs.hpp"
+#include "input/PaymentInputs.hpp"
 #include "utils/Errors.hpp"
 
 Task<drogon_model::bookstore::Orders> OrdersController::ownOrder(const std::string& userId, const std::string& orderId) {
@@ -41,6 +42,17 @@ Task<HttpResponsePtr> OrdersController::DeleteOrder(HttpRequestPtr req, std::str
 
 Task<HttpResponsePtr> OrdersController::PayOrder(HttpRequestPtr req, std::string id) {
     const auto userId = req->attributes()->get<std::string>("id");
-    auto payment = co_await services_->paymentService->createPayment(userId, id);
-    co_return res::success(paymentJson(payment), k201Created);
+    auto parsed = parsePayOrder(req->body());
+    if (auto* errors = std::get_if<std::vector<FieldError>>(&parsed)) {
+        co_return res::badRequest(*errors);
+    }
+
+    const auto& input = std::get<PayOrderInput>(parsed);
+    const auto checkout = co_await services_->paymentService->startCheckout(userId, id, input.callbackUrl);
+
+    Json::Value data;
+    data["reference"] = checkout.reference;
+    data["authorization_url"] = checkout.authorizationUrl;
+    data["status"] = "pending";
+    co_return res::success(data);
 }

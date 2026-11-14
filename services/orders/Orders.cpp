@@ -43,11 +43,24 @@ Task<Orders> OrderService::createOrder(const std::string& userId, const CreateOr
 }
 
 Task<bool> OrderService::deleteOrder(const std::string& id) {
-    CoroMapper<Payments> payments(dbClient_);
-    if (co_await payments.count(Criteria(Payments::Cols::_order_id, CompareOperator::EQ, id)) > 0) {
-        throw Conflict("Paid orders can't be deleted");
-    }
+    auto tx = co_await dbClient_->newTransactionCoro();
+    try {
+        CoroMapper<Orders> orders(tx);
+        try {
+            co_await orders.forUpdate().findByPrimaryKey(id);
+        } catch (const UnexpectedRows&) {
+            co_return false;
+        }
 
-    CoroMapper<Orders> orders(dbClient_);
-    co_return (co_await orders.deleteByPrimaryKey(id)) > 0;
+        CoroMapper<Payments> payments(tx);
+        if (co_await payments.count(Criteria(Payments::Cols::_order_id, CompareOperator::EQ, id) &&
+                                    Criteria(Payments::Cols::_status, CompareOperator::NE, "failed")) > 0) {
+            throw Conflict("This order has a payment (paid, in progress or being refunded), so it can't be deleted");
+        }
+
+        co_return (co_await orders.deleteByPrimaryKey(id)) > 0;
+    } catch (...) {
+        tx->rollback();
+        throw;
+    }
 }

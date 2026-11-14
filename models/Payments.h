@@ -55,6 +55,14 @@ class Payments
         static const std::string _user_id;
         static const std::string _order_id;
         static const std::string _amount;
+        static const std::string _reference;
+        static const std::string _checkout_url;
+        static const std::string _status;
+        static const std::string _currency;
+        static const std::string _created_at;
+        static const std::string _paid_at;
+        static const std::string _next_check_at;
+        static const std::string _check_count;
 
     };
 
@@ -146,9 +154,81 @@ class Payments
     ///Set the value of the column amount
     void setAmount(const int64_t &pAmount) noexcept;
 
+    /**  For column reference  */
+    ///Get the value of the column reference, returns the default value if the column is null
+    const std::string &getValueOfReference() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getReference() const noexcept;
+    ///Set the value of the column reference
+    void setReference(const std::string &pReference) noexcept;
+    void setReference(std::string &&pReference) noexcept;
+    void setReferenceToNull() noexcept;
+
+    /**  For column checkout_url  */
+    ///Get the value of the column checkout_url, returns the default value if the column is null
+    const std::string &getValueOfCheckoutUrl() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getCheckoutUrl() const noexcept;
+    ///Set the value of the column checkout_url
+    void setCheckoutUrl(const std::string &pCheckoutUrl) noexcept;
+    void setCheckoutUrl(std::string &&pCheckoutUrl) noexcept;
+    void setCheckoutUrlToNull() noexcept;
+
+    /**  For column status  */
+    ///Get the value of the column status, returns the default value if the column is null
+    const std::string &getValueOfStatus() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getStatus() const noexcept;
+    ///Set the value of the column status
+    void setStatus(const std::string &pStatus) noexcept;
+    void setStatus(std::string &&pStatus) noexcept;
+
+    /**  For column currency  */
+    ///Get the value of the column currency, returns the default value if the column is null
+    const std::string &getValueOfCurrency() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getCurrency() const noexcept;
+    ///Set the value of the column currency
+    void setCurrency(const std::string &pCurrency) noexcept;
+    void setCurrency(std::string &&pCurrency) noexcept;
+
+    /**  For column created_at  */
+    ///Get the value of the column created_at, returns the default value if the column is null
+    const ::trantor::Date &getValueOfCreatedAt() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<::trantor::Date> &getCreatedAt() const noexcept;
+    ///Set the value of the column created_at
+    void setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept;
+
+    /**  For column paid_at  */
+    ///Get the value of the column paid_at, returns the default value if the column is null
+    const ::trantor::Date &getValueOfPaidAt() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<::trantor::Date> &getPaidAt() const noexcept;
+    ///Set the value of the column paid_at
+    void setPaidAt(const ::trantor::Date &pPaidAt) noexcept;
+    void setPaidAtToNull() noexcept;
+
+    /**  For column next_check_at  */
+    ///Get the value of the column next_check_at, returns the default value if the column is null
+    const ::trantor::Date &getValueOfNextCheckAt() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<::trantor::Date> &getNextCheckAt() const noexcept;
+    ///Set the value of the column next_check_at
+    void setNextCheckAt(const ::trantor::Date &pNextCheckAt) noexcept;
+    void setNextCheckAtToNull() noexcept;
+
+    /**  For column check_count  */
+    ///Get the value of the column check_count, returns the default value if the column is null
+    const int32_t &getValueOfCheckCount() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<int32_t> &getCheckCount() const noexcept;
+    ///Set the value of the column check_count
+    void setCheckCount(const int32_t &pCheckCount) noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 4;  }
+
+    static size_t getColumnNumber() noexcept {  return 12;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -185,6 +265,14 @@ class Payments
     std::shared_ptr<std::string> userId_;
     std::shared_ptr<std::string> orderId_;
     std::shared_ptr<int64_t> amount_;
+    std::shared_ptr<std::string> reference_;
+    std::shared_ptr<std::string> checkoutUrl_;
+    std::shared_ptr<std::string> status_;
+    std::shared_ptr<std::string> currency_;
+    std::shared_ptr<::trantor::Date> createdAt_;
+    std::shared_ptr<::trantor::Date> paidAt_;
+    std::shared_ptr<::trantor::Date> nextCheckAt_;
+    std::shared_ptr<int32_t> checkCount_;
 
     struct MetaData
     {
@@ -197,7 +285,7 @@ class Payments
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[4]={ false };
+    bool dirtyFlag_[12]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -245,6 +333,58 @@ class Payments
         {
             sql += "amount,";
             ++parametersCount;
+        }
+
+        if(dirtyFlag_[4])
+        {
+            sql += "reference,";
+            ++parametersCount;
+        }
+
+        if(dirtyFlag_[5])
+        {
+            sql += "checkout_url,";
+            ++parametersCount;
+        }
+        sql += "status,";
+        ++parametersCount;
+
+        if(!dirtyFlag_[6])
+        {
+            needSelection=true;
+        }
+        sql += "currency,";
+        ++parametersCount;
+
+        if(!dirtyFlag_[7])
+        {
+            needSelection=true;
+        }
+        sql += "created_at,";
+        ++parametersCount;
+
+        if(!dirtyFlag_[8])
+        {
+            needSelection=true;
+        }
+
+        if(dirtyFlag_[9])
+        {
+            sql += "paid_at,";
+            ++parametersCount;
+        }
+
+        if(dirtyFlag_[10])
+        {
+            sql += "next_check_at,";
+            ++parametersCount;
+        }
+        sql += "check_count,";
+        ++parametersCount;
+
+        if(!dirtyFlag_[11])
+        {
+            needSelection=true;
         }
 
         if(parametersCount > 0)
@@ -295,6 +435,90 @@ class Payments
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
 
+        }
+
+        if(dirtyFlag_[4])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        if(dirtyFlag_[5])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        if(dirtyFlag_[6])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        else
+        {
+            sql +="default,";
+        }
+
+        if(dirtyFlag_[7])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        else
+        {
+            sql +="default,";
+        }
+
+        if(dirtyFlag_[8])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        else
+        {
+            sql +="default,";
+        }
+
+        if(dirtyFlag_[9])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        if(dirtyFlag_[10])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        if(dirtyFlag_[11])
+        {
+
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+
+        }
+
+        else
+        {
+            sql +="default,";
         }
 
         if(parametersCount > 0)

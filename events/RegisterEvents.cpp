@@ -22,4 +22,12 @@ void RegisterEvents(EventBus* bus, TaskQueue* queue) {
             {"path", event.path}
         });
     });
+
+    bus->Subscribe<PaymentVerifyDue>(PAYMENT_VERIFY_DUE, [queue](PaymentVerifyDue event) {
+        queue->enqueue("verify_payment", {{"reference", event.reference}});
+    });
+
+    bus->Subscribe<PaymentRefundDue>(PAYMENT_REFUND_DUE, [queue](PaymentRefundDue event) {
+        queue->enqueue("refund_payment", {{"reference", event.reference}});
+    });
 }

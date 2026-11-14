@@ -10,6 +10,7 @@
 #include "controllers/SettingsController.h"
 #include "controllers/AuthController.h"
 #include "controllers/JobsController.h"
+#include "controllers/CronController.h"
 #include "services/Services.hpp"
 #include "bootstrap/Bootstrap.hpp"
 #include "utils/Errors.hpp"
@@ -76,6 +77,7 @@ int main() {
     drogon::app().registerController(std::make_shared<PaymentsController>(service));
     drogon::app().registerController(std::make_shared<SettingsController>(service));
     drogon::app().registerController(std::make_shared<JobsController>(service));
+    drogon::app().registerController(std::make_shared<CronController>(ctx->scheduler, ctx->settings->cron.secret));
     drogon::app().setExceptionHandler(handleException);
     drogon::app().setCustom404Page(res::notFound("Route not found"));
     drogon::app().run();

@@ -92,8 +92,13 @@ Settings* getSettings() {
     s->uploads.pdfTimeoutSeconds = toInt("PDF_TIMEOUT_SECONDS", "600");
     s->uploads.pdfMaxImages = toInt("PDF_MAX_IMAGES", "300");
     s->uploads.pdfMaxConcurrent = toInt("PDF_MAX_CONCURRENT", "1");
+    s->payments.paystackSecretKey   = dotenv::require("PAYSTACK_SECRET_KEY");
+    s->payments.paystackApiUrl      = dotenv::get_or("PAYSTACK_API_URL", "https://api.paystack.co");
+    s->payments.maxChecks           = toInt("PAYMENT_MAX_CHECKS", "10");
+    s->cron.secret                  = dotenv::get_or("CRON_SECRET", "");
 
     if (s->port < 1 || s->port > 65535) throw std::runtime_error("PORT out of range");
+    if (s->payments.maxChecks < 1) throw std::runtime_error("PAYMENT_MAX_CHECKS must be at least 1");
 
     g_settings = std::move(s);
     return g_settings.get();

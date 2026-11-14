@@ -72,6 +72,14 @@ services:
       - key: PDF_MAX_CONCURRENT
         value: "1"
 
+      # Paystack payments
+      - key: PAYSTACK_SECRET_KEY
+        sync: false                # sk_live_... (or sk_test_... while testing)
+      - key: PAYMENT_MAX_CHECKS
+        value: "10"
+      - key: CRON_SECRET
+        generateValue: true        # the X-Cron-Secret header for POST /internal/cron/{task}
+
   - type: keyvalue
     name: mbooks-redis
     plan: free

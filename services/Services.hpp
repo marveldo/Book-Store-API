@@ -25,6 +25,7 @@ class Services {
         OrderService* orderService;
         UserSettingsService* userSettingsService;
         PaymentService* paymentService;
+        PaystackClient* paystackClient;
         JwtService* jwtService;
         CloudinaryService* cloudinaryService;
         JobService* jobService;
@@ -38,7 +39,8 @@ class Services {
         bookCommentService = new BookCommentService(dbClient, events);
         orderService = new OrderService(dbClient, events);
         userSettingsService = new UserSettingsService(dbClient, events);
-        paymentService = new PaymentService(dbClient, events);
+        paystackClient = new PaystackClient(settings.payments.paystackSecretKey, settings.payments.paystackApiUrl);
+        paymentService = new PaymentService(dbClient, events, paystackClient, settings.payments.maxChecks);
         cloudinaryService = new CloudinaryService(
             settings.cloudinary.cloudName,
             settings.cloudinary.apiKey,
@@ -66,6 +68,7 @@ class Services {
         delete orderService;
         delete userSettingsService;
         delete paymentService;
+        delete paystackClient;
         delete jwtService;
         delete cloudinaryService;
         delete jobService;

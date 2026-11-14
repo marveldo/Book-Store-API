@@ -4,16 +4,16 @@
 #include <string>
 #include <string_view>
 
-struct CreatePaymentInput {
-    std::string amount;      // "24.98": PaymentService must check it equals the order's total_price
+struct PayOrderInput {
+    std::string callbackUrl;   // the frontend page Paystack sends the customer back to
 };
 
-inline ParseResult<CreatePaymentInput> parseCreatePayment(std::string_view raw) {
-    static const std::regex money(R"(\d{1,8}(\.\d{1,2})?)");
-    return parseInput<CreatePaymentInput>(raw, [](Validator& v) {
-        v.onlyAllow({"amount"});
-        auto amount = v.requiredString("amount", 1, 11);
-        v.matches(amount, "amount", money, "must look like 24.98 (max 2 decimal places)");
-        return CreatePaymentInput{amount.value_or("")};
+inline ParseResult<PayOrderInput> parsePayOrder(std::string_view raw) {
+    static const std::regex url(R"(https?://[^\s"'<>]+)");
+    return parseInput<PayOrderInput>(raw, [](Validator& v) {
+        v.onlyAllow({"callback_url"});
+        auto callbackUrl = v.requiredString("callback_url", 8, 500);
+        v.matches(callbackUrl, "callback_url", url, "must be an http:// or https:// URL");
+        return PayOrderInput{callbackUrl.value_or("")};
     });
 }

@@ -52,6 +52,9 @@
     },
     {
       "name": "Settings"
+    },
+    {
+      "name": "Cron"
     }
   ],
   "paths": {
@@ -1974,7 +1977,7 @@
             "$ref": "#/components/responses/409"
           }
         },
-        "description": "Paid orders can't be deleted.",
+        "description": "Orders with a payment that is paid, in progress, abandoned (could still be paid) or being refunded can't be deleted (409). Orders with no payment, or only failed ones, can.",
         "security": [
           {
             "bearerAuth": []
@@ -2001,7 +2004,7 @@
         ],
         "summary": "Pay for an order",
         "responses": {
-          "201": {
+          "200": {
             "description": "OK",
             "content": {
               "application/json": {
@@ -2017,7 +2020,7 @@
                       "example": true
                     },
                     "data": {
-                      "$ref": "#/components/schemas/Payment"
+                      "$ref": "#/components/schemas/Checkout"
                     }
                   }
                 }
@@ -2027,6 +2030,9 @@
           "401": {
             "$ref": "#/components/responses/401"
           },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
           "404": {
             "$ref": "#/components/responses/404"
           },
@@ -2034,12 +2040,35 @@
             "$ref": "#/components/responses/409"
           }
         },
-        "description": "Records the payment and adds the book to the user's library.",
+        "description": "Starts a Paystack checkout and returns its `authorization_url`: redirect the customer there. Paystack then sends them to `callback_url` with `?reference=...` (and `&trxref=...`); that page calls `POST /api/v1/payments/{reference}/verify`.\n\nCalling this again while a checkout is still open returns the same one. The book is added to the library only once Paystack confirms the payment (callback, webhook or the automatic check). When an open checkout is reused, Paystack keeps the callback_url it was first given.",
         "security": [
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "callback_url"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "callback_url": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 500,
+                    "example": "https://mbooks.app/payments/callback",
+                    "description": "Your page Paystack sends the customer back to, with ?reference=... added"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/payments": {
@@ -2138,6 +2167,216 @@
         "security": [
           {
             "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/{reference}/verify": {
+      "parameters": [
+        {
+          "name": "reference",
+          "in": "path",
+          "required": true,
+          "description": "Paystack reference from the pay response or the callback URL",
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Confirm a payment (callback page)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Payment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Paystack couldn't be reached; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "description": "Asks Paystack for the payment's status and returns the updated payment. Safe to call repeatedly: `pending` means the bank hasn't confirmed yet (poll again in a few seconds), `success` means the book is in the library.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Paystack webhook",
+        "responses": {
+          "200": {
+            "description": "Received"
+          },
+          "401": {
+            "description": "Bad or missing x-paystack-signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body isn't JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Called by Paystack, not the frontend. Set this URL in the Paystack dashboard (Settings > API Keys & Webhooks). Checked with the `x-paystack-signature` header (HMAC-SHA512 of the body with the secret key). Handles `charge.success`, `refund.processed` and `refund.failed`.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-paystack-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "example": "charge.success"
+                  },
+                  "data": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/cron/{task}": {
+      "parameters": [
+        {
+          "name": "task",
+          "in": "path",
+          "required": true,
+          "description": "Scheduled task name",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "reconcile_payments"
+            ]
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Cron"
+        ],
+        "summary": "Run a scheduled task now",
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CronResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bad or missing X-Cron-Secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "For an external scheduler (cron-job.org, GitHub Actions) on Render's free tier, where the server sleeps and its own timers stop. Call it about once an hour. Runs at most once per time slot across all servers. Off when CRON_SECRET is empty.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Cron-Secret",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ]
       }
@@ -3048,6 +3287,77 @@
           "amount": {
             "type": "number",
             "example": 25.0
+          },
+          "currency": {
+            "type": "string",
+            "example": "NGN"
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true,
+            "example": "mb_0b8f8a52-3c1e-4d5e-9d2a-7f1f4c2b9e10",
+            "description": "Paystack transaction reference. Null for payments made before Paystack was added."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "success",
+              "failed",
+              "abandoned",
+              "refund_pending",
+              "refunding",
+              "refunded",
+              "refund_failed"
+            ],
+            "description": "pending: waiting for the customer or the bank. success: paid, book added to the library. failed: Paystack declined it. abandoned: not paid after the last automatic check (a later payment is refunded). refund_pending / refunding / refunded: money taken that we're returning (paid after abandoned, wrong amount, or the order was already paid). refund_failed: Paystack couldn't refund it; it will be refunded by hand."
+          },
+          "checkout_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Paystack checkout page, only while pending"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paid_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "Checkout": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "example": "mb_0b8f8a52-3c1e-4d5e-9d2a-7f1f4c2b9e10"
+          },
+          "authorization_url": {
+            "type": "string",
+            "example": "https://checkout.paystack.com/abc123",
+            "description": "Send the customer here to pay"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending"
+            ]
+          }
+        }
+      },
+      "CronResult": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "example": "reconcile_payments"
+          },
+          "enqueued": {
+            "type": "boolean",
+            "description": "false if this time slot already ran (another trigger or server got there first)"
           }
         }
       },
